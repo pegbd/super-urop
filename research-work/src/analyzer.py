@@ -5,120 +5,122 @@ import sys
 from collections import defaultdict
 from random import shuffle
 
-def analyze(song_file, tempo):
+def analyze(song_file):
 
     """
-    Takes in a song file and parses it into measures of AnalyzedNote objects
+    Takes in a song file and parses it into measures of AnalyzedElement objects
 
     Args:
         song_file (String): the song's file path (currently tested with .xml files)
-        tempo: the desired tempo for this song to be analyzed at
 
     Returns:
-        measures_of_analyzed_notes (List[List[AnalyzedNote]]): grouped AnalyzedNote objects
+        measures_of_analyzed_elements (List[List[AnalyzedElement]]): grouped AnalyzedElement objects
         in their measures.
     """
 
     song = m21.converter.parse(song_file)
-    measures_of_analyzed_notes = analyze_notes_by_measure(song)
 
-    return measures_of_analyzed_notes, song
+    # split into parts
+    measures_of_analyzed_elements = analyze_elements_by_measure(song)
 
-def total_duration_at_tempo(song, tempo):
-    #TODO: Doc
-    song.insert(0, tempo)
-    return song.seconds * 1000
+    return measures_of_analyzed_elements, song
 
-def to_stream(measures_of_analyzed_notes):
+
+def to_stream(measures_of_analyzed_elements):
 
     """
-    Converts a group of measures of AnalyzedNote objects detailing a song, back into a playable stream.
+    Converts a group of measures of AnalyzedElement objects detailing a song, back into a playable stream.
     Args:
-        measures (List[List[AnalyzedNote]]) AnalyzedNotes grouped in measures
+        measures (List[List[AnalyzedElement]]) AnalyzedElements grouped in measures
 
     Returns:
         stream (m21.stream.Stream) playable stream object with the measures
     """
 
-    stream = analyze_note_measures_to_stream(measures_of_analyzed_notes)
+    stream = analyze_element_measures_to_stream(measures_of_analyzed_elements)
 
     return stream
 
 # Private Internal Methods
 
-def get_note_roman_numeral(note, songKey):
+def get_note_roman_numeral(element, songKey):
 
     """
     Return the roman numeral object of the given note relative to
     the given key.
 
     Args:
-        note (music21.note.Note || music21.note.Rest): The note of interest. Or a rest.
+        element (music21.note.Note || music21.note.Rest || music21.chord.Chord): The note, rest, or chord of interest.
         key (music21.key.Key): The key signature context.
 
     Returns:
-        roman (music21.roman.RomanNumeral): Roman numeral of the note's degree within the key
+        roman (music21.roman.RomanNumeral): Roman numeral of the element's degree within the key
                                             signature context
     """
 
-    if note.isNote:
+    # a rest has no roman numeral, so return None
+    if element.isRest:
+        return None
+
+    chordWrapper = element
+
+    if element.isNote:
         # wrap note in a "chord" by itself
-        noteInChordWrapper = m21.chord.Chord([note])
+        chordWrapper = m21.chord.Chord([element])
 
-        # analyze the note in the song key
-        roman = m21.roman.romanNumeralFromChord(noteInChordWrapper, songKey)
+    # analyze the element in the song key
+    roman = m21.roman.romanNumeralFromChord(chordWrapper, songKey)
 
-        return roman
-
-    return None
+    return roman
 
 
-def analyze_notes_by_measure(song):
+def analyze_elements_by_measure(song):
 
     """
     Returns the scale degrees of a list of notes relative to
-    the given key, all wrapped within an AnalyzedNote object.
+    the given key, all wrapped within an AnalyzedElement object.
 
     Args:
-        notes (List[music21.note.Note]): Sequence of notes.
-        key (music21.key.Key): The key signature context.
+        song (m21.stream.Score)
 
     Returns:
-        notes_by_measure (List[List[AnalyzedNote]]): List of all notes grouped by their
+        parts (List[List[List[AnalyzedElement]]]): List of all notes grouped by their
                                                      corresponding measures.
     """
 
     songKey = song.analyze("key")
+    parts = []
 
-    # song broken up into measures
-    measures = song.parts[0].getElementsByClass(m21.stream.Measure)
-    notes_by_measure = []
+    # break the song up into parts
+    for part in song.parts:
+        measures = part.getElementsByClass(m21.stream.Measure)
+        notes_by_measure = []
 
-    for measure in measures:
+        #TODO: track last time signature and add to each following measure
+        for measure in measures:
+            m = measure.number
+            t = measure.timeSignature
 
-        m = measure.number
-        t = measure.timeSignature
+            # filter out elements != {Note or Rest}
+            playable = list(filter(lambda x: is_note_or_chord_or_rest(x), measure))
+            # notes in the measure
+            notes = []
 
-        # filter out elements != {Note or Rest}
-        playable = list(filter(lambda x: is_note_or_rest(x), measure))
+            offset = 1
+            for el in playable:
+                an = AnalyzedElement(songKey, el, m, t, offset)
+                notes.append(an)
 
-        # notes in the measure
-        notes = []
+                offset += el.duration.quarterLength
 
-        offset = 1
-        for el in playable:
-            roman = get_note_roman_numeral(el, songKey)
-            an = AnalyzedNote(songKey, el, roman, m, t, offset)
-            notes.append(an)
+            # add the measure of notes to the list of measures.
+            notes_by_measure.append(notes)
 
-            offset += el.duration.quarterLength
+        parts.append(notes_by_measure)
 
-        # add the measure of notes to the list of measures.
-        notes_by_measure.append(notes)
+    return parts
 
-    return notes_by_measure
-
-def is_note_or_rest(element):
+def is_note_or_chord_or_rest(element):
     """
     Returns whether the element is a note or a rest object
 
@@ -129,72 +131,129 @@ def is_note_or_rest(element):
         (Boolean) whether the element type is of m21 Note or Rest
     """
 
-    note = type(element) == m21.note.Note
-    rest = type(element) == m21.note.Rest
+    note = type(element) is m21.note.Note
+    rest = type(element) is m21.note.Rest
+    chord = type(element) is m21.chord.Chord
 
-    return note or rest
+    return note or rest or chord
 
-def analyze_note_measures_to_stream(measures):
+def analyze_element_measures_to_stream(parts):
     """
     Returns list of analyzed notes grouped by measure converted into a playable
     Stream object
 
     Args:
-        measures (List[List[AnalyzedNote]]) AnalyzedNotes grouped in measures
+        parts (List[List[List[AnalyzedElement]]]) AnalyzedElements grouped in measures, separated by parts
 
     Returns:
         stream (m21.stream.Stream) playable stream object with the measures
     """
     stream = m21.stream.Stream()
-    for measure in measures:
-        m = m21.stream.Measure()
-        m.timeSignature = measure[0].timeSignature
 
-        for note in measure:
-            m.append(note.note)
+    for part in parts:
+        p = m21.stream.Part()
 
-        stream.append(m)
+        for measure in part:
+            m = m21.stream.Measure()
+            m.timeSignature = None
+
+            for note in measure:
+                if m.timeSignature is None:
+                    m.timeSignature = note.timeSignature
+
+                m.append(note.element)
+
+            p.append(m)
+
+        stream.insert(0, p)
 
     return stream
 
-class AnalyzedNote:
-    def __init__(self, key, note, roman, measureNumber, timeSignature, beatOffset):
+def get_semitone_difference_for_new_key(oldMode, newMode, degree):
+    """
+    Calculates the difference in semitones for the scale degree between the modes.
+    For example, returns -1 for scale degree 3 where oldMode = Major and newMode = Minor
+
+    Args:
+        oldMode (String)
+        newMode (String)
+        degree (integer)
+
+    Returns:
+        The difference in semitones above the tonic for the scale degree, between the old and new modes
+    """
+    assert(degree >= 2)
+
+    # create the abstract diatonic scale of the new key, and old key, and get their intervals
+    oldIntervals = [i.name for i in m21.scale.AbstractDiatonicScale(oldMode).getIntervals()]
+    newIntervals = [i.name for i in m21.scale.AbstractDiatonicScale(newMode).getIntervals()]
+
+    index = degree - 2
+
+    #add up all the intervals up until the scale degree, to get the interval above the tonic
+    oldNoteInt = m21.interval.add(oldIntervals[:index + 1])
+    newNoteInt = m21.interval.add(newIntervals[:index + 1])
+
+    # print("----------------")
+    # print(degree)
+    # print(oldMode)
+    # print(oldNoteInt)
+    # print(newMode)
+    # print(newNoteInt)
+    # print("----------------")
+
+    difference = newNoteInt.semitones - oldNoteInt.semitones
+
+    return difference
+
+class AnalyzedElement:
+    def __init__(self, key, element, measureNumber=None, timeSignature=None, beatOffset=None):
         self.key = key
-        self.note = note
-        self.roman = roman
+        self.element = element
+        self.roman = get_note_roman_numeral(element, key)
         self.measureNumber = measureNumber
         self.timeSignature = timeSignature
         self.beatOffset = beatOffset
 
         #TODO:
-        # note offset for position in measure
         # weak reference (to parent object)
         # m21.common.wrapWeakRef, unrwapWeakRef
-
         # parent has strong reference to child, which has weak reference to parent
+
+    def get_notes_midi(self):
+        if self.is_rest():
+            return []
+        elif self.is_note():
+            return [self.element.pitch.midi]
+        else:
+            return [p.midi for p in self.element.pitches]
 
     def is_note(self):
         """
-        returns whether note is a note object or not
+        returns whether element is a note object or not
         """
-        return self.note.isNote
+        return type(self.element) is m21.note.Note
 
     def is_rest(self):
         """
-        Returns whether note is a rest or not
+        Returns whether element is a rest or not
         """
-        return self.note.isRest
+        return type(self.element) is m21.note.Rest
 
-    def copy(self, key=None, note=None, roman=None, measureNumber=None, timeSignature=None, beatOffset=None):
+    def is_chord(self):
         """
-        Returns a copy of the note, with specified attributes replaced.
+        Returns whether element is a rest or not
+        """
+        return type(self.element) is m21.chord.Chord
+
+    def copy(self, key=None, element=None, measureNumber=None, timeSignature=None, beatOffset=None):
+        """
+        Returns a copy of the element with specified attributes replaced.
         """
         if key is None:
             key = self.key
-        if note is None:
-            note = self.key
-        if roman is None:
-            roman = self.roman
+        if element is None:
+            element = self.element
         if measureNumber is None:
             measureNumber = self.measureNumber
         if timeSignature is None:
@@ -202,12 +261,12 @@ class AnalyzedNote:
         if beatOffset is None:
             beatOffset = self.beatOffset
 
-        return AnalyzedNote(key, note, roman, measureNumber, timeSignature, beatOffset)
+        return AnalyzedElement(key, element, measureNumber, timeSignature, beatOffset)
 
     def in_new_key(self, newKey):
 
         """
-        Return a new AnalyzedNote with the same scale degree in
+        Return a new AnalyzedElement with the same scale degree in
         a different key.
 
         Major key -> Major key: simple transposition.
@@ -218,57 +277,60 @@ class AnalyzedNote:
         TODO: Map the new note's pitch relative to self.note's octave
 
         Args:
-            self (AnalyzedNote): this note.
+            self (AnalyzedElement): this note.
             key (music21.key.Key): The new key signature
 
         Returns:
-            new_note (AnalyzedNote): new note analyzed in a different key.
+            new_note (AnalyzedElement): new note analyzed in a different key.
         """
 
         #TODO: get interval.Interval(Ko_tonic, Kn_tonic), intv.transpose(no)
         #TODO: Start wrapping transformations within a future, non-blocking
 
-        #return itself if its a rest and not a note.
+        #return itself if its a rest
         if self.is_rest():
             return self
 
-        edges = ['b-', 'b', 'b#']
-        keyName = newKey.tonic.name.lower()
+        # get the interval and transpose the element
+        interval = m21.interval.Interval(self.key.tonic, newKey.tonic).name
+        newElement = self.element.transpose(interval)
 
-        threshold = 11
+        #TODO: Fix the enharmonic naming of this function!!
+        # print (self.element.name)
+        # print("before alteration")
+        # print(newElement.name)
 
-        if keyName in edges:
-            threshold += edges.index(keyName) + 1
+        if self.is_note():
+            scaleDegreeData = self.roman.scaleDegreeWithAlteration
 
-        # get the scale degree from the roman numeral object, with the accidental
-        scaleDegree = self.roman.scaleDegreeWithAlteration
-        degree = scaleDegree[0]
-        alteration = scaleDegree[1]
+            if (scaleDegreeData[0] >= 2) and (self.key.mode != newKey.mode):
+                difference = get_semitone_difference_for_new_key(self.key.mode, newKey.mode, scaleDegreeData[0])
 
+                newElement = newElement.transpose(m21.interval.Interval(difference))
+        else:
+            # the element is a chord, whose overall roman numeral analysis is self.roman
 
-        newKeyMode = newKey.mode
-        # compute the scale of the new key
-        newKeyScale = newKey.getScale(newKeyMode)
+            # initialize new chord list
+            newChord = []
 
-        # find the corresponding pitch in the new scale using the degree
-        newPitch = newKeyScale.pitchesFromScaleDegrees([degree])[0]
+            # create temp stream with key context to get the scale degrees of the chord
+            tempStream = m21.stream.Stream()
+            tempStream.append(self.key)
+            tempStream.append(self.element)
 
-        difference = newPitch.midi - self.note.midi
+            scaleDegreeData = self.element.scaleDegrees
 
-        if difference >= threshold:
-            newPitch = newPitch.transpose(-12.0)
-        elif difference <= -threshold:
-            newPitch = newPitch.transpose(12.0)
+            # for each annotated scale degree in the chord
+            for i in range(len(scaleDegreeData)):
+                data = scaleDegreeData[i]
+                if (data[0] >= 2) and (self.key.mode != newKey.mode):
+                    difference = get_semitone_difference_for_new_key(self.key.mode, newKey.mode, data[0])
 
-        # apply the accidental if it exists
-        if alteration is not None:
-            adjust = alteration.alter
-            newPitch = newPitch.transpose(adjust)
+                    newChord.append(newElement.pitches[i].transpose(difference))
+                else:
+                    newChord.append(newElement.pitches[i])
 
-        # create a new note with the new pitch and the same duration
-        new_note = m21.note.Note(newPitch)
-        new_note.duration = self.note.duration
+            newElement = m21.chord.Chord(newChord)
+            newElement.duration = self.element.duration
 
-        newRoman = get_note_roman_numeral(new_note, newKey)
-
-        return AnalyzedNote(newKey, new_note, newRoman, self.measureNumber, self.timeSignature, self.beatOffset)
+        return self.copy(key=newKey, element=newElement)

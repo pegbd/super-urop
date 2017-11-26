@@ -14,8 +14,6 @@ converter = m21.converter
 # entire stream.Score of the song
 song = converter.parse('../scores/bare-necessities.xml')
 
-C_MAJOR = 'c major'
-
 #TODO: When loading in the song, get all of the information from the stream and load them in.
 class SongLooper:
     def __init__(self, song_file, tempo):
@@ -24,36 +22,44 @@ class SongLooper:
         self.song_file = song_file
 
         self.tempo = m21.tempo.MetronomeMark(number = tempo)
-        self.original_measures, self.song = analyzer.analyze(song_file, self.tempo)
+        self.original_parts, self.song = analyzer.analyze(song_file)
 
-        self.measures = copy.deepcopy(self.original_measures)
+        # get the key of the song
+        self.initial_key = str(self.song.analyze("key")).lower()
+
+        self.length = len(self.original_parts[0])
+
+        self.parts = copy.deepcopy(self.original_parts)
 
         self.transformation_cache = transformation_cache = TTLCache(maxsize=50, ttl=600)
 
-        self.current_measure = self.measures[0]
+        self.current_measure_in_parts = [part[0] for part in self.parts]
         self.measure_index = 0
 
         self.last_measure_beat = 0
 
-        self.current_rhythm = 'ORIGINAL'
-        self.current_key = 'c major'
+        self.current_rhythms = ['ORIGINAL' for i in range(len(self.parts))]
+        self.current_keys = [self.initial_key for i in range(len(self.parts))]
 
     def initialize(self):
-        cache_key = self.get_cache_key(self.current_key, self.current_rhythm)
-        self.transformation_cache[cache_key] = copy.deepcopy(self.original_measures)
+        # cache the measures of each individual part
+        for i in range(len(self.original_parts)):
+            cache_key = self.get_cache_key(i, self.current_keys[i], self.current_rhythms[i])
+            self.transformation_cache[cache_key] = copy.deepcopy(self.original_parts[i])
+
         self.reset()
 
     def set_tempo(self, tempo):
         self.tempo = m21.tempo.MetronomeMark(number = tempo)
 
     def reset(self):
-        self.current_measure = self.measures[0]
+        self.current_measure_in_parts = [part[0] for part in self.parts]
         self.measure_index = 0
         self.last_measure_beat = 0
 
     def step(self, beat):
-        self.measure_index = (self.measure_index + 1) % len(self.measures)
-        self.current_measure = self.measures[self.measure_index]
+        self.measure_index = (self.measure_index + 1) % self.length
+        self.current_measure_in_parts = [part[self.measure_index] for part in self.parts]
         self.last_measure_beat = beat
 
     def _transform_key(self, measures, tonic, mode):
@@ -75,58 +81,74 @@ class SongLooper:
         self.transformation_cache[rhythm_id] = ostinated_measures
 
         # set measures equal to the new measures
-        # self.measures = ostinated_measures
-        # self.current_measure = self.measures[self.measure_index]
+        # self.parts = ostinated_measures
+        # self.current_measure_in_parts = self.parts[self.measure_index]
 
         return ostinated_measures
 
-    def transform(self, key=None, rhythm=None):
+    def transform(self, part_indexes=None, key=None, rhythm=None):
 
-        if key == None:
-            key = self.current_key
+        if part_indexes == None:
+            part_indexes = [i for i in range(len(self.parts))]
 
-        if rhythm == None:
-            rhythm = copy.deepcopy(self.current_rhythm)
+        return_parts = []
+        for i in range(len(self.parts)):
 
-        cache_key = self.get_cache_key(key, rhythm)
+            if i not in part_indexes:
+                return_parts.append(self.parts[i])
+            else:
 
+                # check both key and rhythms
+                if key == None:
+                    key = self.current_keys[i]
 
-        return_measures = self.transformation_cache.get(cache_key)
+                if rhythm == None:
+                    rhythm = copy.deepcopy(self.current_rhythms[i])
 
-        if return_measures == None:
-            print('cache miss!')
-            rhythm_id = self.rhythm_to_string(rhythm)
-            base_rhythm_measures = self.transformation_cache.get(self.get_cache_key(C_MAJOR, rhythm_id))
+                # generate the cache key for this part
+                cache_key = self.get_cache_key(i, key, rhythm)
 
-            if base_rhythm_measures == None:
-                base_rhythm_measures = self._transform_rhythm(self.original_measures, rhythm)
+                # check to see if this combination is already cached
+                return_measures = self.transformation_cache.get(cache_key)
 
-            k = key.split(" ")
-            tonic = k[0]
-            mode = k[1]
+                # if not, generate the transformation
+                if return_measures == None:
+                    print('cache miss!')
+                    rhythm_id = self.rhythm_to_string(rhythm)
+                    base_rhythm_measures = self.transformation_cache.get(self.get_cache_key(i, self.initial_key, rhythm_id))
 
-            return_measures = self._transform_key(base_rhythm_measures, tonic, mode)
-        else:
-            print("cache hit!")
+                    if base_rhythm_measures == None:
+                        base_rhythm_measures = self._transform_rhythm(self.original_parts[i], rhythm)
+
+                    k = key.split(" ")
+                    tonic = k[0]
+                    mode = k[1]
+
+                    return_measures = self._transform_key(base_rhythm_measures, tonic, mode)
+
+                    #set current key and current rhythm for this part
+                    self.current_keys[i] = key
+                    self.current_rhythms[i] = rhythm
+
+                    #cache results
+                    self.transformation_cache[cache_key] = return_measures
+
+                else:
+                    print("cache hit!")
+
+                return_parts.append(return_measures)
 
         #set measures equal to the new measures
-        self.measures = return_measures
+        self.parts = return_parts
 
         #get current measure
-        self.current_measure = self.measures[self.measure_index]
-
-        #set current key and current rhythm
-        self.current_key = key
-        self.current_rhythm = rhythm
-
-        #cache results
-        self.transformation_cache[cache_key] = return_measures
+        self.current_measure_in_parts = [part[self.measure_index] for part in self.parts]
 
     def get_current_measure(self):
-        return self.current_measure
+        return self.current_measure_in_parts
 
-    def get_all_measures(self):
-        return self.measures
+    def get_all_parts(self):
+        return self.parts
 
     def get_measure_index(self):
         return self.get_measure_index
@@ -137,5 +159,6 @@ class SongLooper:
     def rhythm_to_string(self, rhythm):
         return "".join([str(beat) for beat in rhythm])
 
-    def get_cache_key(self, key, rhythm):
-        return key + " " + self.rhythm_to_string(rhythm)
+    def get_cache_key(self, part, key, rhythm):
+        print(part)
+        return "part " + str(part) + ": " + key + " " + self.rhythm_to_string(rhythm)

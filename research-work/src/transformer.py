@@ -5,7 +5,6 @@ import sys
 from collections import defaultdict
 from random import shuffle
 
-
 # transformation 1
 def transpose_to_new_key(measures, key):
     """

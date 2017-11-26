@@ -27,10 +27,10 @@ class MainWidget(BaseWidget) :
 
         # Set up FluidSynth
         self.channel = 0 #TODO: look into m21 channel
-        self.patch = (0, 40) #TODO: Get patch from m21
+        self.patch = (0, 0) #TODO: Get patch from m21
         self.synth.program(self.channel, self.patch[0], self.patch[1])
 
-        self.song_path = '../scores/cowboy-overture.xml'
+        self.song_path = '../scores/zelda.xml'
 
         # create TempoMap, AudioScheduler
         self.tempo = 120 #TODO: grab tempo from file
@@ -50,9 +50,10 @@ class MainWidget(BaseWidget) :
         self.add_widget(self.label)
 
         # as the loop continues, these values will be updated to the current transformation
-        self.note_letter = 'c'
-        self.accidental_letter = ''
-        self.mode = 'major'
+        key_info = self.looper.initial_key.split(" ")
+        self.note_letter = key_info[0][0]
+        self.accidental_letter = key_info[0][1] if len(key_info[0]) == 2 else ''
+        self.mode = key_info[1]
 
         # Rhythm editting mechanism
         self.held_r = False # Keep track of whether R is being held down
@@ -142,24 +143,35 @@ class MainWidget(BaseWidget) :
             # next step in the loop
             self.looper.step(now_beat)
 
-            # schedule each note that appears within the measure
-            print([note.beatOffset for note in self.looper.current_measure])
-            for i in range(len(self.looper.current_measure)):
-                note = self.looper.current_measure[i]
-                if note.is_note():
-                    pitch = note.note.pitch.midi
-                    dur = note.note.duration.quarterLength
+            # schedule each element that appears within the measure
+            for part in self.looper.current_measure_in_parts:
+                for i in range(len(part)):
 
-                    # these are the millisecond timestamps that the notes will be scheduled on
-                    on_tick = now_tick + note.beatOffset*kTicksPerQuarter
+                    #retrieve the specific element in the measure
+                    element = part[i]
+                    dur = element.element.duration.quarterLength
+                    # ge millisecond timestamps that the element will be scheduled on
+                    on_tick = now_tick + element.beatOffset*kTicksPerQuarter
                     off_tick = on_tick + kTicksPerQuarter*dur
 
-                    # schedule note on
-                    self.sched.post_at_tick(on_tick, self.on_cmd, pitch)
+                    # if the element is a note
+                    if element.is_note():
+                        pitch = element.element.pitch.midi
 
-                    # schedule note off
-                    self.sched.post_at_tick(off_tick, self.off_cmd, pitch)
+                        # schedule note on
+                        self.sched.post_at_tick(on_tick, self.on_cmd, pitch)
 
+                        # schedule note off
+                        self.sched.post_at_tick(off_tick, self.off_cmd, pitch)
+
+                    # else if the element is a chord
+                    elif element.is_chord():
+                        pitches = [pitch.midi for pitch in list(element.element.pitches)]
+
+                        # schedule off and on events for each pitch in the chord
+                        for pitch in pitches:
+                            self.sched.post_at_tick(on_tick, self.on_cmd, pitch)
+                            self.sched.post_at_tick(off_tick, self.off_cmd, pitch)
 
 
         self.label.text = self.sched.now_str() + '\n'
