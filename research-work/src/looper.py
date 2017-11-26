@@ -8,6 +8,7 @@ import time
 import analyzer
 import transformer
 import copy
+# import concurrent.futures as fut
 
 converter = m21.converter
 
@@ -87,7 +88,6 @@ class SongLooper:
         return ostinated_measures
 
     def transform(self, part_indexes=None, key=None, rhythm=None):
-
         if part_indexes == None:
             part_indexes = [i for i in range(len(self.parts))]
 
@@ -143,6 +143,10 @@ class SongLooper:
 
         #get current measure
         self.current_measure_in_parts = [part[self.measure_index] for part in self.parts]
+
+    # def transform_async(self, part_indexes=None, key=None, rhythm=None):
+    #     with fut.ThreadPoolExecutor(max_workers=5) as executor:
+    #         executor.submit(self.transform, part_indexes, key, rhythm)
 
     def get_current_measure(self):
         return self.current_measure_in_parts

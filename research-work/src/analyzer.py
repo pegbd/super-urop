@@ -210,7 +210,7 @@ class AnalyzedElement:
     def __init__(self, key, element, measureNumber=None, timeSignature=None, beatOffset=None):
         self.key = key
         self.element = element
-        self.roman = get_note_roman_numeral(element, key)
+        self.roman = get_note_roman_numeral(self.element, self.key)
         self.measureNumber = measureNumber
         self.timeSignature = timeSignature
         self.beatOffset = beatOffset

@@ -10,6 +10,7 @@ import music21 as m21
 import analyzer
 import transformer
 import looper
+import concurrent.futures as fut
 
 #TODO A sequence of Rhythmic transformation that will increase tension
 #TODO Start with 2D Emotion mapping between valence and arousal, such that you map numerical values to emotions, start mapping different musical concepts to arousal/valence
@@ -30,7 +31,7 @@ class MainWidget(BaseWidget) :
         self.patch = (0, 0) #TODO: Get patch from m21
         self.synth.program(self.channel, self.patch[0], self.patch[1])
 
-        self.song_path = '../scores/zelda.xml'
+        self.song_path = '../scores/hogwarts-forever.xml'
 
         # create TempoMap, AudioScheduler
         self.tempo = 120 #TODO: grab tempo from file
@@ -59,6 +60,9 @@ class MainWidget(BaseWidget) :
         self.held_r = False # Keep track of whether R is being held down
         self.r_log = [] # Log of all numbers pressed
         self.rhythm = [] # Rhythm recorded
+
+        # concurrent processing of transformations
+        self.executor = fut.ThreadPoolExecutor(max_workers=10)
 
     def on_cmd(self, tick, pitch):
         self.synth.noteon(self.channel, pitch, 100)
@@ -110,7 +114,7 @@ class MainWidget(BaseWidget) :
 
         # if this results in a key change, then calculate the new transformation
         if current_tonic != new_tonic or current_mode != new_mode:
-            self.looper.transform(key=new_key)
+            self.executor.submit(self.looper.transform, None, new_key, None)
 
             self.note_letter = note
             self.accidental_letter = accidental
@@ -121,8 +125,7 @@ class MainWidget(BaseWidget) :
             self.held_r = False
             if len(self.r_log) >= 4:
                 self.rhythm = self.r_log[-4:]
-
-                self.looper.transform(rhythm=self.rhythm)
+                self.executor.submit(self.looper.transform, None, None, self.rhythm)
 
     def on_update(self) :
         self.audio.on_update()
@@ -138,7 +141,7 @@ class MainWidget(BaseWidget) :
         diff = now_beat - previous_beat
         mb = 4
 
-        if (diff == 4):
+        if (diff == mb):
             print("hit")
             # next step in the loop
             self.looper.step(now_beat)

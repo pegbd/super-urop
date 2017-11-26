@@ -4,6 +4,7 @@ import sklearn as skl
 import sys
 from collections import defaultdict
 from random import shuffle
+import copy
 
 # transformation 1
 def transpose_to_new_key(measures, key):
@@ -48,51 +49,55 @@ def fill_ostinato(measures, rhythm):
 
     ostinated_measures = []
     for measure in measures:
-        # dictonary that maps the present notes to the previous quarter note beat
-        prev_notes_on_beats = defaultdict(list)
+
+        # dictonary that maps the present elementss to the previous quarter-note beat
+        # for example, if beat 2 of the measure has sixteenth notes, there will then 2 -> [N, N, N, N]
+        prev_elements_on_beats = defaultdict(list)
 
         #return measure
         m = []
 
-        # map each note to its previous strong beat
-        for note in measure:
+        # map each element to its previous strong beat
+        for element in measure:
             # previous quarter note beat number
-            beat = int(note.beatOffset)
+            beat = int(element.beatOffset)
 
-            # place the note to its prev beat.
-            prev_notes_on_beats[beat].append(note)
+            # place the element to its prev beat.
+            prev_elements_on_beats[beat].append(element)
 
         for i in range(len(rhythm)):
-            #current quarter note beat == i + 1
-            notes = []
+            # current quarter note beat == i + 1
+            elements = []
             cur_index = i + 1
-            # find notes. if current index beat doesn't have note attacks, look at previous beats
-            while len(notes) == 0 and cur_index > 0:
-                notes = prev_notes_on_beats[cur_index]
+
+            # find elements. if current index beat doesn't have note attacks, look at previous beats
+            # this takes care of the case where the previous element has duration > quarter length (i.e. a half note),
+            # such that the next beat has no attack (and thus no elements)
+            while len(elements) == 0 and cur_index > 0:
+                elements = prev_elements_on_beats[cur_index]
                 cur_index -= 1
 
-            # if there are still no notes.
-            if len(notes) == 0:
+            # if there are still no elements.
+            if len(elements) == 0:
                 raise ValueError('This song has no notes...')
 
             # 1 = quarter, 2 = eighth, 3 = eighth triplet, 4 = sixteenth notes, etc.
-            num_notes_for_rhythm = rhythm[i]
-            ql = 1.0/num_notes_for_rhythm
+            num_elements_for_rhythm = rhythm[i]
+            ql = 1.0/num_elements_for_rhythm
 
             # if there are equal notes as required for the new rhythm
-            if num_notes_for_rhythm == len(notes):
-                for note in notes:
-                    p = note.note.nameWithOctave
-                    new_note = m21.note.Note(p)
+            if num_elements_for_rhythm == len(elements):
+                for element in elements:
+                    new_element = copy.deepcopy(element.element)
+                    new_element.duration = m21.duration.Duration(quarterLength=ql)
 
-                    new_note.duration = m21.duration.Duration(quarterLength=ql)
-                    m.append(note.copy(note=new_note))
+                    m.append(element.copy(element=new_element))
 
-            elif num_notes_for_rhythm > len(notes):
+            elif num_elements_for_rhythm > len(elements):
                 # divide the rhythm evenly along notes
-                times = [int(num_notes_for_rhythm/len(notes)) for n in range(len(notes))]
+                times = [int(num_elements_for_rhythm/len(elements)) for n in range(len(elements))]
 
-                extra = num_notes_for_rhythm % len(notes)
+                extra = num_elements_for_rhythm % len(elements)
 
                 # if not even, add extra notes from the beginning
                 if extra != 0:
@@ -100,35 +105,33 @@ def fill_ostinato(measures, rhythm):
                         times[x] += 1
 
                 internal_offset = 0
-                for j in range(len(notes)):
-                    note = notes[j]
-                    p = note.note.nameWithOctave
+                for j in range(len(elements)):
+                    element = elements[j]
+
+                    new_element = copy.deepcopy(element.element)
+                    new_element.duration = m21.duration.Duration(quarterLength=ql)
 
                     t = times[j]
 
                     # t = some integer
                     for repeat in range(t):
-                        new_note = m21.note.Note(p)
-                        new_note.duration = m21.duration.Duration(quarterLength=ql)
                         offset = (i + 1) + (internal_offset)*ql
-                        m.append(note.copy(note=new_note, beatOffset=offset))
+                        m.append(element.copy(element=new_element, beatOffset=offset))
                         internal_offset += 1
 
             else:
-                first = notes[::2]
-                then = notes[1::2]
+                first = elements[::2]
+                then = elements[1::2]
 
                 seq = first + then
-                for j in range(num_notes_for_rhythm):
-                    note = seq[j]
+                for j in range(num_elements_for_rhythm):
+                    element = seq[j]
 
-                    p = note.note.nameWithOctave
-
-                    new_note = m21.note.Note(p)
-                    new_note.duration = m21.duration.Duration(quarterLength=ql)
+                    new_element = copy.deepcopy(element.element)
+                    new_element.duration = m21.duration.Duration(quarterLength=ql)
 
                     offset = (i + 1) + j*ql
-                    m.append(note.copy(note=new_note, beatOffset=offset))
+                    m.append(element.copy(element=new_element, beatOffset=offset))
 
         ostinated_measures.append(m)
 
@@ -151,30 +154,26 @@ def replace_rests(measures):
         m = []
 
         # find all non-rest notes in measure
-        notes = list(filter(lambda x: x.is_note(), measure))
+        non_rest_elements = list(filter(lambda x: not x.is_rest(), measure))
 
-        if len(notes) == 0:
-            raise ValueError('There are no notes in this measure')
+        if len(non_rest_elements) == 0:
+            raise ValueError('There are no notes or chords in this measure')
 
         for i in range(len(measure)):
-            note = measure[i]
+            element = measure[i]
 
-            if note.is_rest():
+            if element.is_rest():
                 if i == 0:
                     index = i+1
                 else:
                     index = i-1
 
-                d = note.note.duration
-                p = notes[index%len(notes)].note.nameWithOctave
-
-                new_note = m21.note.Note(p)
-                new_note.duration = d
-
-                m.append(note.copy(note=new_note))
+                replace_element = non_rest_elements[index]
+                new_element = copy.deepcopy(replace_element.element)
+                m.append(element.copy(element=new_element))
 
             else:
-                m.append(note)
+                m.append(element)
 
         altered_measures.append(m)
 
