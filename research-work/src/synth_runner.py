@@ -61,6 +61,10 @@ class MainWidget(BaseWidget) :
         self.r_log = [] # Log of all numbers pressed
         self.rhythm = [] # Rhythm recorded
 
+        #parts control
+        self.num_parts = len(self.looper.parts)
+        self.current_part_index = 0
+
         # concurrent processing of transformations
         self.executor = fut.ThreadPoolExecutor(max_workers=10)
 
@@ -103,6 +107,14 @@ class MainWidget(BaseWidget) :
             cur_time = self.tempo_map.tick_to_time(self.sched.get_tick())
             self.tempo_map.set_tempo(self.tempo, cur_time)
             self.looper.set_tempo(self.tempo)
+        elif keycode[1] == 'up':
+            self.current_part_index = (self.current_part_index + 1) % self.num_parts
+            self.r_log = []
+            self.rhythm = []
+        elif keycode[1] == 'down':
+            self.current_part_index = (self.current_part_index - 1) % self.num_parts
+            self.r_log = []
+            self.rhythm = []
 
         current_tonic = self.note_letter + self.accidental_letter
         current_mode = self.mode
@@ -125,7 +137,7 @@ class MainWidget(BaseWidget) :
             self.held_r = False
             if len(self.r_log) >= 4:
                 self.rhythm = self.r_log[-4:]
-                self.executor.submit(self.looper.transform, None, None, self.rhythm)
+                self.executor.submit(self.looper.transform, [self.current_part_index], None, self.rhythm)
 
     def on_update(self) :
         self.audio.on_update()
@@ -181,6 +193,7 @@ class MainWidget(BaseWidget) :
         self.label.text += 'key = ' + self.note_letter + self.accidental_letter + ' ' + self.mode + '\n'
         self.label.text += 'rhythm = ' + str(self.r_log[-4:]) + '\n'
         self.label.text += 'tempo = ' + str(self.tempo) + '\n'
+        self.label.text += 'selected part = ' + str(self.current_part_index + 1) + '\n'
 
 
 run(eval('MainWidget'))
