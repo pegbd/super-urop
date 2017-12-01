@@ -107,15 +107,15 @@ def fill_ostinato(measures, rhythm):
                 internal_offset = 0
                 for j in range(len(elements)):
                     element = elements[j]
-
-                    new_element = copy.deepcopy(element.element)
-                    new_element.duration = m21.duration.Duration(quarterLength=ql)
-
                     t = times[j]
-
+                    
                     # t = some integer
                     for repeat in range(t):
                         offset = (i + 1) + (internal_offset)*ql
+
+                        new_element = copy.deepcopy(element.element)
+                        new_element.duration = m21.duration.Duration(quarterLength=ql)
+
                         m.append(element.copy(element=new_element, beatOffset=offset))
                         internal_offset += 1
 

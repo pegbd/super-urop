@@ -25,6 +25,62 @@ def analyze(song_file):
 
     return measures_of_analyzed_elements, song
 
+def generate_rhythmic_frequency_distribution(stream):
+
+    """
+    Observes and calculates the probability of observing a note with ql = b based off of the song
+
+    Args:
+        stream (m21.stream.Stream) stream of interest
+
+    Returns:
+        frequency_dist (defaultdict(float)) distribution dictionary with the frequencies of each beat quarterlength
+    """
+
+    frequency_dist = defaultdict(float)
+    playable = list(filter(lambda x: is_note_or_chord_or_rest(x), stream.recurse()))
+
+    for el in playable:
+        frequency_dist[el.duration.quarterLength] += 1
+
+    for key in frequency_dist.keys():
+        frequency_dist[key] = float(frequency_dist[key]) / len(playable)
+
+    return frequency_dist
+
+def generate_rhythmic_transitions_distributions(stream):
+
+    """
+    Observes and calculates the conditional probabilities of transitioning to a beat of ql = t+1, given that
+    the current beat is ql = t
+
+    Args:
+        stream (m21.stream.Stream) stream of interest
+
+    Returns:
+        new_dist (defaultdict(float)) distribution dictionary with conditional calculations taken into account
+    """
+
+    transition_dist = defaultdict(int)
+    playable = list(filter(lambda x: is_note_or_chord_or_rest(x), stream.recurse()))
+
+    for i in range(len(playable) - 1):
+        r1 = playable[i].duration.quarterLength
+        r2 = playable[i+1].duration.quarterLength
+
+        key = (r1, r2)
+        transition_dist[key] += 1
+
+    new_dist = defaultdict(float)
+    for key in transition_dist.keys():
+        conditional = list(filter(lambda x: x[0] == key[0], transition_dist.keys()))
+        denominator = sum([transition_dist[y] for y in conditional])
+
+        print (denominator)
+
+        new_dist[key] = float(transition_dist[key]) / denominator
+
+    return new_dist
 
 def to_stream(measures_of_analyzed_elements):
 
@@ -101,7 +157,7 @@ def analyze_elements_by_measure(song):
             m = measure.number
             t = measure.timeSignature
 
-            # filter out elements != {Note or Rest}
+            # filter out elements != {Note, Chord or Rest}
             playable = list(filter(lambda x: is_note_or_chord_or_rest(x), measure))
             # notes in the measure
             notes = []
