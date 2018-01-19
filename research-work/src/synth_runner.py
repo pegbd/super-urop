@@ -10,7 +10,9 @@ import music21 as m21
 import analyzer
 import transformer
 import looper
+import av_grid
 import concurrent.futures as fut
+import client
 
 #TODO A sequence of Rhythmic transformation that will increase tension
 #TODO Start with 2D Emotion mapping between valence and arousal, such that you map numerical values to emotions, start mapping different musical concepts to arousal/valence
@@ -23,15 +25,8 @@ class MainWidget(BaseWidget) :
     def __init__(self):
         super(MainWidget, self).__init__()
 
-        self.audio = Audio(2)
-        self.synth = Synth('./synth_data/FluidR3_GM.sf2')
-
-        # Set up FluidSynth
-        self.channel = 0 #TODO: look into m21 channel
-        self.patch = (0, 0) #TODO: Get patch from m21
-        self.synth.program(self.channel, self.patch[0], self.patch[1])
-
-        self.song_path = '../scores/hogwarts-forever.xml'
+        self.audio = Audio(2) # set up audio
+        self.song_path = '../scores/zelda-full-buttmcbutt.xml' # set song path
 
         # create TempoMap, AudioScheduler
         self.tempo = 120 #TODO: grab tempo from file
@@ -41,6 +36,13 @@ class MainWidget(BaseWidget) :
         # Add a looper
         self.looper = looper.SongLooper(self.song_path, self.tempo)
         self.looper.initialize()
+
+        # Set up FluidSynth
+        self.synth = Synth('./synth_data/FluidR3_GM.sf2')
+
+        # set up a midi channel for each part
+        for i in range(len(self.looper.parts)):
+            self.synth.program(i, 0, 0)
 
         # connect scheduler into audio system
         self.audio.set_generator(self.sched)
@@ -56,88 +58,14 @@ class MainWidget(BaseWidget) :
         self.accidental_letter = key_info[0][1] if len(key_info[0]) == 2 else ''
         self.mode = key_info[1]
 
-        # Rhythm editting mechanism
-        self.held_r = False # Keep track of whether R is being held down
-        self.r_log = [] # Log of all numbers pressed
-        self.rhythm = [] # Rhythm recorded
-
-        #parts control
-        self.num_parts = len(self.looper.parts)
-        self.current_part_index = 0
-
         # concurrent processing of transformations
         self.executor = fut.ThreadPoolExecutor(max_workers=10)
 
-    def on_cmd(self, tick, pitch):
-        self.synth.noteon(self.channel, pitch, 100)
+    def on_cmd(self,tick, pitch, channel):
+        self.synth.noteon(channel, pitch, 100)
 
-    def off_cmd(self, tick, pitch):
-        self.synth.noteoff(self.channel, pitch)
-
-    def on_key_down(self, keycode, modifiers):
-        note = self.note_letter
-        accidental = self.accidental_letter
-        mode = self.mode
-        if keycode[1] in 'abcdefg':
-            note = keycode[1]
-        elif keycode[1] in '123456789':
-            if self.held_r:
-                self.r_log.append(int(keycode[1]))
-
-        elif keycode[1] == 'i':
-            accidental = '#'
-        elif keycode[1] == 'p':
-            accidental = '-'
-        elif keycode[1] == 'o':
-            accidental = ''
-        elif keycode[1] == '-':
-            mode = 'major'
-        elif keycode[1] == '=':
-            mode = 'minor'
-        elif keycode[1] == 'r':
-            self.held_r = True
-            self.r_log = []
-        elif keycode[1] == 'right':
-            self.tempo += 8
-            cur_time = self.tempo_map.tick_to_time(self.sched.get_tick())
-            self.tempo_map.set_tempo(self.tempo, cur_time)
-            self.looper.set_tempo(self.tempo)
-        elif keycode[1] == 'left':
-            self.tempo -= 8
-            cur_time = self.tempo_map.tick_to_time(self.sched.get_tick())
-            self.tempo_map.set_tempo(self.tempo, cur_time)
-            self.looper.set_tempo(self.tempo)
-        elif keycode[1] == 'up':
-            self.current_part_index = (self.current_part_index + 1) % self.num_parts
-            self.r_log = []
-            self.rhythm = []
-        elif keycode[1] == 'down':
-            self.current_part_index = (self.current_part_index - 1) % self.num_parts
-            self.r_log = []
-            self.rhythm = []
-
-        current_tonic = self.note_letter + self.accidental_letter
-        current_mode = self.mode
-
-        new_tonic = note + accidental
-        new_mode = mode
-
-        new_key = new_tonic + " " + new_mode
-
-        # if this results in a key change, then calculate the new transformation
-        if current_tonic != new_tonic or current_mode != new_mode:
-            self.executor.submit(self.looper.transform, None, new_key, None)
-
-            self.note_letter = note
-            self.accidental_letter = accidental
-            self.mode = mode
-
-    def on_key_up(self, keycode):
-        if keycode[1] == 'r':
-            self.held_r = False
-            if len(self.r_log) >= 4:
-                self.rhythm = self.r_log[-4:]
-                self.executor.submit(self.looper.transform, [self.current_part_index], None, self.rhythm)
+    def off_cmd(self,tick, pitch, channel):
+        self.synth.noteoff(channel, pitch)
 
     def on_update(self) :
         self.audio.on_update()
@@ -159,11 +87,12 @@ class MainWidget(BaseWidget) :
             self.looper.step(now_beat)
 
             # schedule each element that appears within the measure
-            for part in self.looper.current_measure_in_parts:
-                for i in range(len(part)):
+            for i in range(len(self.looper.current_measure_in_parts)):
+                part = self.looper.current_measure_in_parts[i]
+                for j in range(len(part)):
 
                     #retrieve the specific element in the measure
-                    element = part[i]
+                    element = part[j]
                     dur = element.element.duration.quarterLength
                     # ge millisecond timestamps that the element will be scheduled on
                     on_tick = now_tick + element.beatOffset*kTicksPerQuarter
@@ -174,10 +103,10 @@ class MainWidget(BaseWidget) :
                         pitch = element.element.pitch.midi
 
                         # schedule note on
-                        self.sched.post_at_tick(on_tick, self.on_cmd, pitch)
+                        self.sched.post_at_tick(on_tick, self.on_cmd, pitch, i)
 
                         # schedule note off
-                        self.sched.post_at_tick(off_tick, self.off_cmd, pitch)
+                        self.sched.post_at_tick(off_tick, self.off_cmd, pitch, i)
 
                     # else if the element is a chord
                     elif element.is_chord():
@@ -185,15 +114,193 @@ class MainWidget(BaseWidget) :
 
                         # schedule off and on events for each pitch in the chord
                         for pitch in pitches:
-                            self.sched.post_at_tick(on_tick, self.on_cmd, pitch)
-                            self.sched.post_at_tick(off_tick, self.off_cmd, pitch)
+                            self.sched.post_at_tick(on_tick, self.on_cmd, pitch, i)
+                            self.sched.post_at_tick(off_tick, self.off_cmd, pitch, i)
 
 
         self.label.text = self.sched.now_str() + '\n'
         self.label.text += 'key = ' + self.note_letter + self.accidental_letter + ' ' + self.mode + '\n'
         self.label.text += 'rhythm = ' + str(self.r_log[-4:]) + '\n'
+        self.label.text += 'patch = ' + "".join(self.s_log[-2:]) + '\n'
         self.label.text += 'tempo = ' + str(self.tempo) + '\n'
         self.label.text += 'selected part = ' + str(self.current_part_index + 1) + '\n'
 
+class TransformationWidget(MainWidget):
+    def __init__(self):
+        super(TransformationWidget, self).__init__()
 
-run(eval('MainWidget'))
+    #### TEMPO ###
+    def tempoChanged(self):
+        cur_time = self.tempo_map.tick_to_time(self.sched.get_tick())
+        self.tempo_map.set_tempo(self.tempo, cur_time)
+        self.looper.set_tempo(self.tempo)
+
+    def tempoUp(self):
+        self.tempo += 8
+        self.tempoChanged()
+
+    def tempoDown(self):
+        self.tempo -= 8
+        self.tempoChanged()
+
+    def setTempo(self, tempo):
+        self.tempo = tempo
+        self.tempoChanged()
+
+    #TODO: Add controls for all transformations (instrument, rhythm, etc)
+
+    #### Key and Mode ####
+    def keyChanged(self):
+        new_key = self.note_letter + self.accidental_letter + ' ' + self.mode
+        self.executor.submit(self.looper.transform, None, new_key, None)
+
+    def checkKeyChange(self, note, accidental, mode):
+
+        # if this results in a key change, then calculate the new transformation
+        if not (self.note_letter == note and self.accidental_letter == accidental and self.mode == mode):
+            self.note_letter = note
+            self.accidental_letter = accidental
+            self.mode = mode
+
+            self.keyChanged()
+
+class KeyboardWidget(TransformationWidget):
+    """
+    Control the music transformer via various keyboard inputs.
+    """
+    def __init__(self):
+        super(KeyboardWidget, self).__init__()
+
+        # Rhythm editting mechanism
+        self.held_r = False # Keep track of whether R is being held down
+        self.r_log = [] # Log of all numbers pressed
+        self.rhythm = [] # Rhythm recorded
+
+        # instrument edditing mechanism
+        self.held_s = False
+        self.s_log = []
+
+        #parts control
+        self.num_parts = len(self.looper.parts)
+        self.current_part_index = 0
+
+    def on_key_down(self, keycode, modifiers):
+
+        note = self.note_letter
+        accidental = self.accidental_letter
+        mode = self.mode
+
+        if keycode[1] in 'abcdefg':
+            note = keycode[1]
+        elif keycode[1] in '123456789':
+            if self.held_r:
+                self.r_log.append(int(keycode[1]))
+            elif self.held_s:
+                self.s_log.append(keycode[1])
+
+        elif keycode[1] == 'r':
+            self.held_r = True
+            self.r_log = []
+
+        elif keycode[1] == 's':
+            self.held_s = True
+            self.s_log = []
+
+        elif keycode[1] == 'i':
+            accidental = '#'
+        elif keycode[1] == 'p':
+            accidental = '-'
+        elif keycode[1] == 'o':
+            accidental = ''
+        elif keycode[1] == '-':
+            mode = 'major'
+        elif keycode[1] == '=':
+            mode = 'minor'
+        elif keycode[1] == 'right':
+            self.tempoUp()
+        elif keycode[1] == 'left':
+            self.tempo -= 8
+            self.tempoChanged()
+        elif keycode[1] == 'up':
+            self.current_part_index = (self.current_part_index + 1) % self.num_parts
+            self.r_log = []
+            self.rhythm = []
+        elif keycode[1] == 'down':
+            self.current_part_index = (self.current_part_index - 1) % self.num_parts
+            self.r_log = []
+            self.rhythm = []
+
+        self.checkKeyChange(note, accidental, mode)
+
+    def on_key_up(self, keycode):
+        if keycode[1] == 'r':
+            self.held_r = False
+            if len(self.r_log) >= 4:
+                self.rhythm = self.r_log[-4:]
+                self.executor.submit(self.looper.transform, [self.current_part_index], None, self.rhythm)
+        elif keycode[1] == 's':
+            self.held_s = False
+            if len(self.s_log) == 1:
+                self.synth.program(self.current_part_index, 0, int(self.s_log[0]))
+            elif len(self.s_log) >= 2:
+                self.synth.program(self.current_part_index, 0, int("".join(self.s_log[-2:])))
+
+
+
+class ArousalValenceWidget(TransformationWidget):
+    """
+    Control the music transformer via tuples of Arousal and Valence values that correspond
+    to different values of musical attributes (Rhythm, Tempo, Instrument, etc).
+    """
+    def __init__(self):
+        super(ArousalValenceWidget, self).__init__()
+
+        # self.client = client.HTTPClientReceiver('localhost', '/')
+        # loop_counter = 0
+        # while client.asyncore.socket_map:
+        #     loop_counter += 1
+        #     client.asyncore.loop(timeout=1, count=1)
+
+        self.tempo_grid = TempoGrid()
+        # self.tempo_grid.parse_region_file('./av-grid-regions/tempo.txt')
+
+        self.rhythm_grid = RhythmGrid()
+        # self.rhythm_grid.parse_region_file('./av-grid-regions/rhythm.txt')
+
+        self.instrument_grid = InstrumentGrid()
+        # self.instrument_grid.parse_region_file('./av-grid-regions/instruments.txt')
+
+        self.key_grid = KeySignatureGrid()
+        self.key_grid.parse_region_file('./av-grid-regions/key.txt')
+
+    def on_socket_changed(self, arousal, valence):
+
+        # tempo
+        tempo_region = self.tempo_grid.get_region(arousal, valence)
+        if tempo_region != self.tempo_grid.get_last_region():
+            self.setTempo(tempo_region.get_value())
+
+        # rhythm
+        rhythm_region = self.rhythm_grid.get_region(arousal, valence)
+
+        # instrument
+        instrument_region = self.instrument_grid.get_region(arousal, valence)
+
+        # key
+        key_region = self.key_grid.get_region(arousal, valence)
+        if key_region != self.key_grid.get_last_region():
+            key_tuple = key_region.get_value()
+            self.checkKeyChange(key_tuple[0], key_tuple[1], key_tuple[2])
+
+    def on_update(self):
+        if self.client.message_available():
+            message = self.client.get_message()
+
+            print (message)
+
+        super(ArousalValenceWidget, self).on_update()
+
+
+
+
+run(eval('ArousalValenceWidget'))

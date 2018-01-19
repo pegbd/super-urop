@@ -9,7 +9,8 @@ import transformer
 import looper
 
 converter = m21.converter
-mammoth_paths = m21.corpus.getComposer('ryansMammoth')
+song = converter.parse('../scores/zelda.xml')
 
-for song in mammoth_paths[:5]:
-    m21.converter.parse(song).show('midi')
+m = analyzer.analyze_elements_by_measure(song)
+
+analyzer.analyze_element_measures_to_stream(transformer.fill_ostinato(m[0], [3, 1, 3, 1])).show('midi')

@@ -5,6 +5,12 @@ import sys
 from collections import defaultdict
 from random import shuffle
 import copy
+import unittest
+
+# TODO: Test cases at the bottom of each test case
+# class TransformationTests(unittest.TestCase):
+#     import
+
 
 # transformation 1
 def transpose_to_new_key(measures, key):
@@ -108,7 +114,7 @@ def fill_ostinato(measures, rhythm):
                 for j in range(len(elements)):
                     element = elements[j]
                     t = times[j]
-                    
+
                     # t = some integer
                     for repeat in range(t):
                         offset = (i + 1) + (internal_offset)*ql

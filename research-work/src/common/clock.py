@@ -153,14 +153,14 @@ class Scheduler(object):
     # keep the list of commands sorted from lowest to hightest tick
     # make sure tick is the first argument so sorting will work out
     # properly
-    def post_at_tick(self, tick, func, arg = None) :
+    def post_at_tick(self, tick, func, *args) :
         now_tick = self.get_tick()
 
         if tick <= now_tick:
-            func(tick, arg)
+            func(tick, *args)
             return None
         else:
-            cmd = Command(tick, func, arg)
+            cmd = Command(tick, func, *args)
             self.commands.append(cmd)
             self.commands.sort(key = lambda x: x.tick)
             return cmd
@@ -259,7 +259,7 @@ class AudioScheduler(object):
         return int(float(tick) / kTicksPerQuarter)
 
     # add a record for the function to call at the particular tick
-    def post_at_tick(self, tick, func, arg = None) :
+    def post_at_tick(self, tick, func, *args) :
         now_time  = self.get_time()
         post_time = self.tempo_map.tick_to_time(tick)
 
@@ -268,7 +268,7 @@ class AudioScheduler(object):
             return None
         else:
             # create a command to hold the function/arg and sort by tick
-            cmd = Command(tick, func, arg)
+            cmd = Command(tick, func, *args)
             self.commands.append(cmd)
             self.commands.sort(key = lambda x: x.tick)
             return cmd
@@ -288,18 +288,18 @@ class AudioScheduler(object):
 
 
 class Command(object):
-    def __init__(self, tick, func, arg):
+    def __init__(self, tick, func, *args):
         super(Command, self).__init__()
         self.tick = int(tick)
         self.func = func
-        self.arg = arg
+        self.args = args
         self.did_it = False
 
     def execute(self):
         # ensure that execute only gets called once.
         if not self.did_it:
             self.did_it = True
-            self.func( self.tick, self.arg )
+            self.func( self.tick, *self.args )
 
     def __repr__(self):
         return 'cmd:%d' % self.tick
