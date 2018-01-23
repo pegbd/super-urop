@@ -12,7 +12,6 @@ import transformer
 import looper
 import av_grid
 import concurrent.futures as fut
-import client
 
 #TODO A sequence of Rhythmic transformation that will increase tension
 #TODO Start with 2D Emotion mapping between valence and arousal, such that you map numerical values to emotions, start mapping different musical concepts to arousal/valence
@@ -26,7 +25,7 @@ class MainWidget(BaseWidget) :
         super(MainWidget, self).__init__()
 
         self.audio = Audio(2) # set up audio
-        self.song_path = '../scores/zelda-full-buttmcbutt.xml' # set song path
+        self.song_path = '../scores/cowboy-overture.xml' # set song path
 
         # create TempoMap, AudioScheduler
         self.tempo = 120 #TODO: grab tempo from file
@@ -82,7 +81,6 @@ class MainWidget(BaseWidget) :
         mb = 4
 
         if (diff == mb):
-            print("hit")
             # next step in the loop
             self.looper.step(now_beat)
 
@@ -120,10 +118,7 @@ class MainWidget(BaseWidget) :
 
         self.label.text = self.sched.now_str() + '\n'
         self.label.text += 'key = ' + self.note_letter + self.accidental_letter + ' ' + self.mode + '\n'
-        self.label.text += 'rhythm = ' + str(self.r_log[-4:]) + '\n'
-        self.label.text += 'patch = ' + "".join(self.s_log[-2:]) + '\n'
         self.label.text += 'tempo = ' + str(self.tempo) + '\n'
-        self.label.text += 'selected part = ' + str(self.current_part_index + 1) + '\n'
 
 class TransformationWidget(MainWidget):
     def __init__(self):
@@ -163,6 +158,11 @@ class TransformationWidget(MainWidget):
             self.mode = mode
 
             self.keyChanged()
+
+    def switchInstruments(self, patch):
+        for i in range(len(self.looper.parts)):
+            self.synth.program(i, 0, patch)
+
 
 class KeyboardWidget(TransformationWidget):
     """
@@ -245,7 +245,13 @@ class KeyboardWidget(TransformationWidget):
             elif len(self.s_log) >= 2:
                 self.synth.program(self.current_part_index, 0, int("".join(self.s_log[-2:])))
 
+    def on_update(self):
+        self.label.text += 'rhythm = ' + str(self.r_log[-4:]) + '\n'
+        self.label.text += 'patch = ' + "".join(self.s_log[-2:]) + '\n'
+        self.label.text += 'selected part = ' + str(self.current_part_index + 1) + '\n'
 
+
+        super(KeyboardWidget, self).on_update()
 
 class ArousalValenceWidget(TransformationWidget):
     """
@@ -255,48 +261,62 @@ class ArousalValenceWidget(TransformationWidget):
     def __init__(self):
         super(ArousalValenceWidget, self).__init__()
 
-        # self.client = client.HTTPClientReceiver('localhost', '/')
-        # loop_counter = 0
-        # while client.asyncore.socket_map:
-        #     loop_counter += 1
-        #     client.asyncore.loop(timeout=1, count=1)
+        self.arousal = 0
+        self.valence = 0
+        self.file = open('./data/av.txt', 'r')
 
-        self.tempo_grid = TempoGrid()
-        # self.tempo_grid.parse_region_file('./av-grid-regions/tempo.txt')
+        self.tempo_grid = av_grid.TempoGrid()
+        self.tempo_grid.parse_region_file('./av-grid-regions/tempo.txt')
 
-        self.rhythm_grid = RhythmGrid()
+        self.rhythm_grid = av_grid.RhythmGrid()
         # self.rhythm_grid.parse_region_file('./av-grid-regions/rhythm.txt')
 
-        self.instrument_grid = InstrumentGrid()
-        # self.instrument_grid.parse_region_file('./av-grid-regions/instruments.txt')
+        self.instrument_grid = av_grid.InstrumentGrid()
+        self.instrument_grid.parse_region_file('./av-grid-regions/instruments.txt')
 
-        self.key_grid = KeySignatureGrid()
+        self.key_grid = av_grid.KeySignatureGrid()
         self.key_grid.parse_region_file('./av-grid-regions/key.txt')
 
-    def on_socket_changed(self, arousal, valence):
+    def transform_arousal_valence(self, arousal, valence):
+
+        print(arousal)
+        print(valence)
 
         # tempo
         tempo_region = self.tempo_grid.get_region(arousal, valence)
-        if tempo_region != self.tempo_grid.get_last_region():
-            self.setTempo(tempo_region.get_value())
+        if tempo_region:
+            if tempo_region != self.tempo_grid.get_last_region():
+                self.setTempo(tempo_region.get_value())
 
         # rhythm
         rhythm_region = self.rhythm_grid.get_region(arousal, valence)
 
         # instrument
         instrument_region = self.instrument_grid.get_region(arousal, valence)
+        if instrument_region:
+            if instrument_region != self.instrument_grid.get_last_region():
+                self.switchInstruments(instrument_region.get_value())
 
         # key
         key_region = self.key_grid.get_region(arousal, valence)
-        if key_region != self.key_grid.get_last_region():
-            key_tuple = key_region.get_value()
-            self.checkKeyChange(key_tuple[0], key_tuple[1], key_tuple[2])
+        if key_region:
+            if key_region != self.key_grid.get_last_region():
+
+                key_tuple = key_region.get_value()
+                self.checkKeyChange(key_tuple[0], key_tuple[1], key_tuple[2])
 
     def on_update(self):
-        if self.client.message_available():
-            message = self.client.get_message()
+        where = self.file.tell()
+        line = self.file.readline()
+        if not line:
+            self.file.seek(where)
+        else:
+            values = line.split(' ')
+            self.arousal = float(values[0])
+            self.valence = float(values[1])
 
-            print (message)
+            self.transform_arousal_valence(self.arousal, self.valence)
+
 
         super(ArousalValenceWidget, self).on_update()
 

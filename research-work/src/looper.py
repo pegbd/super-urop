@@ -74,7 +74,6 @@ class SongLooper:
     def _transform_rhythm(self, measures, rhythm):
 
         rhythm_id = self.rhythm_to_string(rhythm)
-        print(rhythm_id)
         # call the fill_ostinato function on the measures
         ostinated_measures =  transformer.fill_ostinato(measures, rhythm)
 
@@ -113,7 +112,6 @@ class SongLooper:
 
                 # if not, generate the transformation
                 if return_measures == None:
-                    print('cache miss!')
                     rhythm_id = self.rhythm_to_string(rhythm)
                     base_rhythm_measures = self.transformation_cache.get(self.get_cache_key(i, self.initial_key, rhythm_id))
 
@@ -132,9 +130,6 @@ class SongLooper:
 
                     #cache results
                     self.transformation_cache[cache_key] = return_measures
-
-                else:
-                    print("cache hit!")
 
                 return_parts.append(return_measures)
 
@@ -164,5 +159,4 @@ class SongLooper:
         return "".join([str(beat) for beat in rhythm])
 
     def get_cache_key(self, part, key, rhythm):
-        print(part)
         return "part " + str(part) + ": " + key + " " + self.rhythm_to_string(rhythm)

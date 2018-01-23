@@ -22,6 +22,7 @@ class AVGrid:
         self.regions = []
 
         # current region
+        self.current_region = None
         self.last_region = None
 
     def insert(self, value, valence_left, valence_right, arousal_bottom, arousal_top):
@@ -54,7 +55,8 @@ class AVGrid:
 
         if selected_regions:
             selected = random.choice(selected_regions)
-            self.last_region = selected
+            self.last_region = self.current_region
+            self.current_region = selected
             return selected
 
         return None
@@ -85,7 +87,18 @@ class TempoGrid(AVGrid):
         super(TempoGrid, self).insert(value, valence_left, valence_right, arousal_bottom, arousal_top)
 
     def parse_region_file(self, filepath):
-        pass
+        # open text file
+        f = open(filepath, 'r')
+
+        # read all regions
+        for line in f.readlines():
+            line = line.strip().split('\t')
+
+            value = int(line[0])
+            print(line[1].split(' '))
+            region = [float(i) for i in line[1].split(' ')]
+
+            self.insert(value, region[0], region[1], region[2], region[3])
 
 
 class InstrumentGrid(AVGrid):
@@ -118,7 +131,18 @@ class InstrumentGrid(AVGrid):
         super(InstrumentGrid, self).insert(value, valence_left, valence_right, arousal_bottom, arousal_top)
 
     def parse_region_file(self, filepath):
-        pass
+        # open text file
+        f = open(filepath, 'r')
+
+        # read all regions
+        for line in f.readlines():
+            line = line.strip().split('\t')
+
+            value = int(line[0])
+            print(line[1].split(' '))
+            region = [float(i) for i in line[1].split(' ')]
+
+            self.insert(value, region[0], region[1], region[2], region[3])
 
 
 class KeySignatureGrid(AVGrid):
@@ -204,7 +228,7 @@ class ParameterRegion:
         self.valence_right = valence_right
 
     def check_av_point(self, arousal, valence):
-        return (valence >= valence_left and valence <= valence_right) and (arousal >= arousal_bottom and arousal <= arousal_top)
+        return (valence >= self.valence_left and valence <= self.valence_right) and (arousal >= self.arousal_bottom and arousal <= self.arousal_top)
 
     def get_value(self):
         return self.parameter_value
