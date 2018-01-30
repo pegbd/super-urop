@@ -1,12 +1,17 @@
 import numpy
 import music21 as m21
 import random
+import numpy as np
+import copy
+
+DISTANCE_EXPONENT = 2.0
+DISTANCE_CUTOFF = 0.40
 
 class AVGrid:
 
     """
     A 2D grid with valence on the X-axis and arousal on the Y-axis. Contains a collection
-    of objects of type ParemeterRegion, plotted along coordinates.
+    of objects of type ParemeterPoint, plotted along coordinates.
     """
 
     def __init__(self):
@@ -19,50 +24,73 @@ class AVGrid:
         self.max_arousal = 1.0
 
         # all rectangular parameter regions
-        self.regions = []
+        self.points = []
 
         # current region
-        self.current_region = None
-        self.last_region = None
+        self.current_point = None
+        self.last_point = None
 
-    def insert(self, value, valence_left, valence_right, arousal_bottom, arousal_top):
+    def insert(self, value, arousal, valence):
 
         """
         Slow implementation: if this creates a bottleneck, will optimize
         """
 
-        # crop the region if it doesn't fit within the grid bounds
-        valence_left = max(valence_left, self.min_valence)
-        valence_right = min(valence_right, self.max_valence)
-        arousal_bottom = max(arousal_bottom, self.min_arousal)
-        arousal_top = min(arousal_top, self.max_arousal)
+        # shift point within bounds if it doesn't originally fit
+        valence = max(valence, self.min_valence)
+        valence = min(valence, self.max_valence)
+        arousal = max(arousal, self.min_arousal)
+        arousal = min(arousal, self.max_arousal)
 
-        # create region
-        region = ParameterRegion(value, valence_left, valence_right, arousal_bottom, arousal_top)
-        self.regions.append(region)
+        # create point
+        point = ParameterPoint(value, arousal, valence)
+        self.points.append(point)
 
-        # sort the regions
-        self.regions = sorted(self.regions, key=lambda r : [r.valence_left, r.arousal_bottom])
+        # sort the points
+        self.points = sorted(self.points, key=lambda p : [p.valence, p.arousal])
 
-    def get_region(self, arousal, valence):
+    def sample_parameter_point(self, arousal, valence):
 
         """
-        Find the region within the AVgrid that contains the point (arousal, valence), and return
-        its parameter value.
+        Create a probability distribution of all points based off of distance to inputted point (valence, arousal), and
+		then randomly sample a point.
         """
 
-        selected_regions = [region for region in self.regions if region.check_av_point(arousal, valence)]
+        distances = []
+        points_within = []
+        distribution = {}
 
-        if selected_regions:
-            selected = random.choice(selected_regions)
-            self.last_region = self.current_region
-            self.current_region = selected
-            return selected
+		# calculate distance of all points to point = (arousal, valence)
+        for point in self.points:
+            distance = point.distance_between(arousal, valence)
+            if distance <= DISTANCE_CUTOFF:
+                distances.append(distance)
+                points_within.append(point)
 
-        return None
+		# distance manipulation, denominator construction
+        furthest = max(distances)
+        inverted = [((furthest - distance) ** DISTANCE_EXPONENT) for distance in distances]
+        denominator = sum(inverted)
 
-    def get_last_region(self):
-        return self.last_region
+		# create probability dictionary distribution
+        for point, invert in zip(points_within, inverted):
+            probability = float(invert) / denominator
+            distribution[point] = probability
+
+		# randomly sample from distribution
+        selected_point = weighted_random(distribution)
+
+		# update last and current pointers
+        self.last_point = self.current_point
+        self.current_point = selected_point
+
+        return selected_point, distribution
+
+    def get_last_point(self):
+        return self.last_point
+
+    def get_points(self):
+        return copy.deepcopy(self.points)
 
 
 class TempoGrid(AVGrid):
@@ -77,16 +105,16 @@ class TempoGrid(AVGrid):
         self.min_tempo = 60
         self.max_tempo = 240
 
-    def insert(self, value, valence_left, valence_right, arousal_bottom, arousal_top):
+    def insert(self, value, arousal, valence):
 
         # use minimum and maximum tempo bounds
         value = max(value, self.min_tempo)
         value = min(value, self.max_tempo)
 
         # use ancestor's insert method with new value
-        super(TempoGrid, self).insert(value, valence_left, valence_right, arousal_bottom, arousal_top)
+        super(TempoGrid, self).insert(value, arousal, valence)
 
-    def parse_region_file(self, filepath):
+    def parse_point_file(self, filepath):
         # open text file
         f = open(filepath, 'r')
 
@@ -95,10 +123,10 @@ class TempoGrid(AVGrid):
             line = line.strip().split('\t')
 
             value = int(line[0])
-            print(line[1].split(' '))
-            region = [float(i) for i in line[1].split(' ')]
+            # print(line[1].split(' '))
+            point = [float(i) for i in line[1:]]
 
-            self.insert(value, region[0], region[1], region[2], region[3])
+            self.insert(value, point[0], point[1])
 
 
 class InstrumentGrid(AVGrid):
@@ -121,16 +149,16 @@ class InstrumentGrid(AVGrid):
             line = line.split()
             self.instruments.append(" ".join(line[1:]))
 
-    def insert(self, value, valence_left, valence_right, arousal_bottom, arousal_top):
+    def insert(self, value, arousal, valence):
 
         # use minimum and maximum tempo bounds
         value = max(value, 0)
         value = min(value, len(self.instruments) - 1)
 
         # use ancestor's insert method with new value
-        super(InstrumentGrid, self).insert(value, valence_left, valence_right, arousal_bottom, arousal_top)
+        super(InstrumentGrid, self).insert(value, arousal, valence)
 
-    def parse_region_file(self, filepath):
+    def parse_point_file(self, filepath):
         # open text file
         f = open(filepath, 'r')
 
@@ -139,10 +167,10 @@ class InstrumentGrid(AVGrid):
             line = line.strip().split('\t')
 
             value = int(line[0])
-            print(line[1].split(' '))
-            region = [float(i) for i in line[1].split(' ')]
+            # print(line[1].split(' '))
+            point = [float(i) for i in line[1:]]
 
-            self.insert(value, region[0], region[1], region[2], region[3])
+            self.insert(value, point[0], point[1])
 
 
 class KeySignatureGrid(AVGrid):
@@ -158,7 +186,7 @@ class KeySignatureGrid(AVGrid):
         self.accidentals = ['', '-', '#']
         self.modes = ['major', 'minor']
 
-    def insert(self, value, valence_left, valence_right, arousal_bottom, arousal_top):
+    def insert(self, value, arousal, valence):
 
         # verify key signature values
         key = value[0] if value[0] in self.tonics else 'c'
@@ -168,9 +196,9 @@ class KeySignatureGrid(AVGrid):
         value = (key, accidental, mode)
 
         # use ancestor's insert method with new value
-        super(KeySignatureGrid, self).insert(value, valence_left, valence_right, arousal_bottom, arousal_top)
+        super(KeySignatureGrid, self).insert(value, arousal, valence)
 
-    def parse_region_file(self, filepath):
+    def parse_point_file(self, filepath):
 
 		# open text file
         f = open(filepath, 'r')
@@ -180,10 +208,10 @@ class KeySignatureGrid(AVGrid):
             line = line.strip().split('\t')
 
             value = tuple(line[0].split(' '))
-            print(line[1].split(' '))
-            region = [float(i) for i in line[1].split(' ')]
+            # print(line[1].split(' '))
+            point = [float(i) for i in line[1:]]
 
-            self.insert(value, region[0], region[1], region[2], region[3])
+            self.insert(value, point[0], point[1])
 
 
 class RhythmGrid(AVGrid):
@@ -198,8 +226,15 @@ class RhythmGrid(AVGrid):
     def insert(self):
         pass
 
-    def parse_region_file(self, filepath):
+    def parse_point_file(self, filepath):
         pass
+
+
+
+
+############################
+##### Point and Region #####
+############################
 
 class ParameterRegion:
 
@@ -232,3 +267,51 @@ class ParameterRegion:
 
     def get_value(self):
         return self.parameter_value
+
+class ParameterPoint:
+
+    """
+    A single point, with an associated value for a musical parameter, on the AV Grid, whose x-coordinate corresponds to
+    the valence, and y-coordinate to its arousal.
+    """
+
+    def __init__(self, parameter_value, arousal, valence):
+        super(ParameterPoint, self).__init__()
+
+        self.parameter_value = parameter_value
+        self.arousal = arousal
+        self.valence = valence
+
+    def get_value(self):
+        return self.parameter_value
+
+    def distance_between(self, arousal, valence):
+        a = self.arousal - arousal
+        v = self.valence - valence
+
+        return np.sqrt(a*a + v*v)
+
+    def __hash__(self):
+        return hash((self.parameter_value, self.arousal, self.valence))
+
+    def __eq__(self, other):
+        return (self.parameter_value, self.arousal, self.valence) == (other.parameter_value, other.arousal, other.valence)
+
+    def __ne__(self, other):
+        # Not strictly necessary, but to avoid having both x==y and x!=y
+        # True at the same time
+        return not(self == other)
+
+
+#################################
+####### HELPER FUNCTIONS ########
+#################################
+
+def weighted_random(distribution):
+    roll = random.random()
+    total = 0
+    for k, v in distribution.items():
+        total += v
+        if roll <= total:
+            return k
+    assert False, 'unreachable'

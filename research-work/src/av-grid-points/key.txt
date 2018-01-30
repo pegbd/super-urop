@@ -1,0 +1,88 @@
+d  major	0.943	0.904
+a - major	0.723	0.857
+b - major	0.733	0.881
+d  major	0.777	0.881
+b - major	0.333	0.881
+d  major	0.467	0.857
+f  major	0.733	0.857
+c  major	0.400	0.857
+a - major	0.667	0.857
+d - major	0.723	0.786
+b  major	0.833	0.786
+b  major	0.933	0.761
+a  major	0.610	0.743
+b  major	0.667	0.739
+f # major	0.057	0.739
+d  major	-0.200	0.667
+d  major	0.167	0.643
+g  major	0.890	0.643
+b - major	0.610	0.643
+c  major	0.200	0.596
+a  major	0.133	0.547
+a  major	0.333	0.524
+d  major	-0.390	0.477
+a  major	-0.557	0.310
+d - major	0.200	0.453
+c  major	-0.467	0.167
+c  major	0.067	0.190
+e - major	-0.167	-0.029
+g  major	0.000	-0.029
+d  major	-0.557	-0.429
+d  minor	-0.557	-0.953
+b  minor	-0.610	-0.904
+g  minor	-0.500	-0.929
+g  minor	-0.610	-0.904
+g  minor	-0.833	-0.881
+e - minor	-0.610	-0.833
+c  minor	-0.667	-0.857
+c  minor	-0.777	-0.739
+f  minor	-0.390	-0.761
+a  minor	0.110	-0.743
+a - minor	-0.467	-0.739
+a  minor	-0.600	-0.714
+f  minor	-0.467	-0.714
+a  minor	-0.600	-0.714
+a  minor	-0.533	-0.690
+d  minor	-0.133	-0.690
+e - minor	-0.333	-0.594
+c # minor	-0.723	-0.667
+e - minor	-0.667	-0.547
+e - minor	-0.600	-0.619
+d  minor	-0.200	-0.571
+c  minor	-0.200	-0.476
+d  minor	-0.600	-0.514
+e  minor	-0.443	-0.310
+d  minor	-0.467	-0.261
+c  minor	-0.390	-0.314
+b  minor	-0.733	-0.096
+b  minor	-0.223	0.071
+e  minor	-0.467	0.000
+c  minor	-0.167	0.571
+c  major	-0.400	0.547
+b - major	0.110	-0.086
+e  minor	-0.667	-0.400
+g  major	-0.533	0.381
+e  major	-0.267	0.333
+f  major	-0.443	0.314
+e - major	-0.223	0.453
+e  major	-0.267	0.191
+b  minor	0.167	-0.844
+b - minor	0.557	-0.769
+c  minor	-0.223	-0.669
+a  minor	0.400	-0.667
+e - minor 	0.467	-0.749
+c  minor	0.223	-0.667
+c  minor	0.667	-0.639
+g  minor	0.000	-0.687
+d  minor	0.200	-0.664
+d  minor	0.500	-0.636
+c  minor	0.390	-0.904
+d  minor	0.500	-0.841
+f # minor	0.800	-0.850
+a  minor	0.600	-0.769
+e  minor	0.600	-0.788
+e  minor	0.600	-0.782
+g # minor	0.867	-0.769
+e  minor	0.667	-0.823
+d  minor	0.400	-0.817
+d  minor	0.400	-0.721

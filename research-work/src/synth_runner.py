@@ -13,19 +13,12 @@ import looper
 import av_grid
 import concurrent.futures as fut
 
-#TODO A sequence of Rhythmic transformation that will increase tension
-#TODO Start with 2D Emotion mapping between valence and arousal, such that you map numerical values to emotions, start mapping different musical concepts to arousal/valence
-#TODO think about video game -> valence/arousal -> music transformation
-
-#TODO supermario hard-coded demo
-#TODO manipulating of the order of the measures, repeats, increase tension
-
 class MainWidget(BaseWidget) :
     def __init__(self):
         super(MainWidget, self).__init__()
 
         self.audio = Audio(2) # set up audio
-        self.song_path = '../scores/cowboy-overture.xml' # set song path
+        self.song_path = '../scores/gourmet-race.xml' # set song path
 
         # create TempoMap, AudioScheduler
         self.tempo = 120 #TODO: grab tempo from file
@@ -124,6 +117,16 @@ class TransformationWidget(MainWidget):
     def __init__(self):
         super(TransformationWidget, self).__init__()
 
+        # volume/dynamic control
+        self.default_volume = 88
+        self.volume_delta = 4
+        self.current_volume = self.default_volume
+        self.crescendo = False
+        self.decrescendo = False
+
+        # tempo control
+        self.tempo_delta = 8.0
+
     #### TEMPO ###
     def tempoChanged(self):
         cur_time = self.tempo_map.tick_to_time(self.sched.get_tick())
@@ -142,15 +145,12 @@ class TransformationWidget(MainWidget):
         self.tempo = tempo
         self.tempoChanged()
 
-    #TODO: Add controls for all transformations (instrument, rhythm, etc)
-
     #### Key and Mode ####
     def keyChanged(self):
         new_key = self.note_letter + self.accidental_letter + ' ' + self.mode
         self.executor.submit(self.looper.transform, None, new_key, None)
 
     def checkKeyChange(self, note, accidental, mode):
-
         # if this results in a key change, then calculate the new transformation
         if not (self.note_letter == note and self.accidental_letter == accidental and self.mode == mode):
             self.note_letter = note
@@ -160,8 +160,32 @@ class TransformationWidget(MainWidget):
             self.keyChanged()
 
     def switchInstruments(self, patch):
+        self.decrescendo = True
         for i in range(len(self.looper.parts)):
             self.synth.program(i, 0, patch)
+
+    def setVolume(self):
+        for i in range(len(self.looper.parts)):
+            self.synth.cc(i, 7, self.current_volume)
+
+    def on_update(self):
+        if self.decrescendo:
+            if self.current_volume > 0:
+                self.current_volume -= self.volume_delta
+                self.setVolume()
+            else:
+                self.decrescendo = False
+                self.crescendo = True
+
+        if self.crescendo:
+            if self.current_volume < self.default_volume:
+                self.current_volume += self.volume_delta
+                self.setVolume()
+            else:
+                self.crescendo = False
+
+        super(TransformationWidget, self).on_update()
+
 
 
 class KeyboardWidget(TransformationWidget):
@@ -249,8 +273,6 @@ class KeyboardWidget(TransformationWidget):
         self.label.text += 'rhythm = ' + str(self.r_log[-4:]) + '\n'
         self.label.text += 'patch = ' + "".join(self.s_log[-2:]) + '\n'
         self.label.text += 'selected part = ' + str(self.current_part_index + 1) + '\n'
-
-
         super(KeyboardWidget, self).on_update()
 
 class ArousalValenceWidget(TransformationWidget):
@@ -266,16 +288,16 @@ class ArousalValenceWidget(TransformationWidget):
         self.file = open('./data/av.txt', 'r')
 
         self.tempo_grid = av_grid.TempoGrid()
-        self.tempo_grid.parse_region_file('./av-grid-regions/tempo.txt')
+        self.tempo_grid.parse_point_file('./av-grid-points/tempo.txt')
 
         self.rhythm_grid = av_grid.RhythmGrid()
-        # self.rhythm_grid.parse_region_file('./av-grid-regions/rhythm.txt')
+        # self.rhythm_grid.parse_point_file('./av-grid-points/rhythm.txt')
 
         self.instrument_grid = av_grid.InstrumentGrid()
-        self.instrument_grid.parse_region_file('./av-grid-regions/instruments.txt')
+        self.instrument_grid.parse_point_file('./av-grid-points/instruments.txt')
 
         self.key_grid = av_grid.KeySignatureGrid()
-        self.key_grid.parse_region_file('./av-grid-regions/key.txt')
+        self.key_grid.parse_point_file('./av-grid-points/key.txt')
 
     def transform_arousal_valence(self, arousal, valence):
 
@@ -283,27 +305,20 @@ class ArousalValenceWidget(TransformationWidget):
         print(valence)
 
         # tempo
-        tempo_region = self.tempo_grid.get_region(arousal, valence)
-        if tempo_region:
-            if tempo_region != self.tempo_grid.get_last_region():
-                self.setTempo(tempo_region.get_value())
+        tempo_point, _ = self.tempo_grid.sample_parameter_point(arousal, valence)
+        self.setTempo(tempo_point.get_value())
 
         # rhythm
-        rhythm_region = self.rhythm_grid.get_region(arousal, valence)
+        # rhythm_point, _ = self.rhythm_grid.sample_parameter_point(arousal, valence)
 
         # instrument
-        instrument_region = self.instrument_grid.get_region(arousal, valence)
-        if instrument_region:
-            if instrument_region != self.instrument_grid.get_last_region():
-                self.switchInstruments(instrument_region.get_value())
+        instrument_point, _ = self.instrument_grid.sample_parameter_point(arousal, valence)
+        self.switchInstruments(instrument_point.get_value())
 
         # key
-        key_region = self.key_grid.get_region(arousal, valence)
-        if key_region:
-            if key_region != self.key_grid.get_last_region():
-
-                key_tuple = key_region.get_value()
-                self.checkKeyChange(key_tuple[0], key_tuple[1], key_tuple[2])
+        key_point, _ = self.key_grid.sample_parameter_point(arousal, valence)
+        key_tuple = key_point.get_value()
+        self.checkKeyChange(key_tuple[0], key_tuple[1], key_tuple[2])
 
     def on_update(self):
         where = self.file.tell()

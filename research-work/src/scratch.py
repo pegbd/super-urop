@@ -1,16 +1,18 @@
-import music21 as m21
-import numpy as np
-import sklearn as skl
-import sys
-from collections import defaultdict
-from random import shuffle
-import analyzer
-import transformer
-import looper
+import av_grid
+import matplotlib.pyplot as plt
 
-converter = m21.converter
-song = converter.parse('../scores/zelda.xml')
+tempo_grid = av_grid.TempoGrid()
+tempo_grid.parse_point_file('./av-grid-points/tempo.txt')
 
-m = analyzer.analyze_elements_by_measure(song)
+points = tempo_grid.get_points()
+p, d = tempo_grid.sample_parameter_point(0.75, 0.75)
+print (p.arousal)
 
-analyzer.analyze_element_measures_to_stream(transformer.fill_ostinato(m[0], [3, 1, 3, 1])).show('midi')
+print ([(pt.arousal, pt.valence) for pt in points])
+
+
+x = [pt.valence for pt in points]
+y = [pt.arousal for pt in points]
+
+plt.plot(y, x, 'ro')
+plt.show()
