@@ -5,6 +5,21 @@ import sys
 from collections import defaultdict
 from random import shuffle
 
+PLAYABLE_MODES = ['major', 'minor']
+mode_intervals = {}
+
+for mode in PLAYABLE_MODES:
+
+    added_intervals = []
+    intervals = [i for i in m21.scale.AbstractDiatonicScale(mode).getIntervals()]
+
+    # add up the intervals
+    for i in range(len(intervals)):
+        added_intervals.append(m21.interval.add(intervals[:i + 1]))
+
+    mode_intervals[mode] = added_intervals
+
+
 def analyze(song_file):
 
     """
@@ -239,27 +254,13 @@ def get_semitone_difference_for_new_key(oldMode, newMode, degree):
         The difference in semitones above the tonic for the scale degree, between the old and new modes
     """
     assert(degree >= 2)
-
-    # create the abstract diatonic scale of the new key, and old key, and get their intervals
-    oldIntervals = [i.name for i in m21.scale.AbstractDiatonicScale(oldMode).getIntervals()]
-    newIntervals = [i.name for i in m21.scale.AbstractDiatonicScale(newMode).getIntervals()]
-
     index = degree - 2
 
     #add up all the intervals up until the scale degree, to get the interval above the tonic
-    oldNoteInt = m21.interval.add(oldIntervals[:index + 1])
-    newNoteInt = m21.interval.add(newIntervals[:index + 1])
-
-    # print("----------------")
-    # print(degree)
-    # print(oldMode)
-    # print(oldNoteInt)
-    # print(newMode)
-    # print(newNoteInt)
-    # print("----------------")
+    oldNoteInt = mode_intervals[oldMode][index]
+    newNoteInt = mode_intervals[newMode][index]
 
     difference = newNoteInt.semitones - oldNoteInt.semitones
-
     return difference
 
 class AnalyzedElement:

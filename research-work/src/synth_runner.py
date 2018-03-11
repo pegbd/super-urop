@@ -18,7 +18,7 @@ class MainWidget(BaseWidget) :
         super(MainWidget, self).__init__()
 
         self.audio = Audio(2) # set up audio
-        self.song_path = '../scores/gourmet-race.xml' # set song path
+        self.song_path = '../scores/luigi.xml' # set song path
 
         # create TempoMap, AudioScheduler
         self.tempo = 120 #TODO: grab tempo from file
@@ -51,7 +51,7 @@ class MainWidget(BaseWidget) :
         self.mode = key_info[1]
 
         # concurrent processing of transformations
-        self.executor = fut.ThreadPoolExecutor(max_workers=10)
+        self.executor = fut.ThreadPoolExecutor(max_workers=4)
 
     def on_cmd(self,tick, pitch, channel):
         self.synth.noteon(channel, pitch, 100)
