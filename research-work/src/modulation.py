@@ -5,8 +5,8 @@ PITCHES = ['A-', 'A', 'A#', 'B-', 'B', 'C', 'C#', 'D-', 'D', 'D#', 'E-', 'E', 'F
 
 class KeyNode:
     def __init__(self, tonic, mode):
-        self.tonic = tonic
-        self.mode = mode
+        self.tonic = tonic.lower()
+        self.mode = mode.lower()
         self.edges = {} # commond chord edges
 
     def insert_edge(self, other_node, chords):
@@ -40,9 +40,9 @@ for pitch in PITCHES:
     # create set of all triads in that scale
     triads = set()
     for p in range(len(scale_pitches) - 4):
-        root = scale_pitches[p]
-        third = scale_pitches[p + 2]
-        fifth = scale_pitches[p + 4]
+        root = scale_pitches[p][:-1]
+        third = scale_pitches[p + 2][:-1]
+        fifth = scale_pitches[p + 4][:-1]
         triads.add((root, third, fifth))
 
     major_triad_sets[pitch] = triads
@@ -56,9 +56,9 @@ for pitch in PITCHES:
     # create set of all triads in that scale
     triads = set()
     for p in range(len(scale_pitches) - 4):
-        root = scale_pitches[p]
-        third = scale_pitches[p + 2]
-        fifth = scale_pitches[p + 4]
+        root = scale_pitches[p][:-1]
+        third = scale_pitches[p + 2][:-1]
+        fifth = scale_pitches[p + 4][:-1]
         triads.add((root, third, fifth))
 
     minor_triad_sets[pitch] = triads
@@ -121,12 +121,12 @@ for pitch1 in PITCHES:
 
         # Major Key -> Minor Key
         if node_2_minor not in node_1_major.get_adjacent_vertices():
-            major_minor = major_triads1.intersection(minor_triads2)
+            major_minor = list(major_triads1.intersection(minor_triads2))
             node_1_major.insert_edge(node_2_minor, major_minor)
 
         # Minor Key -> Major Key
         if node_2_major not in node_1_minor.get_adjacent_vertices():
-            minor_major = minor_triads1.intersection(major_triads2)
+            minor_major = list(minor_triads1.intersection(major_triads2))
             node_1_minor.insert_edge(node_2_major, minor_major)
 
 for node in common_chord_graph:
@@ -136,3 +136,56 @@ for node in common_chord_graph:
         print (k.tonic + ' ' + k.mode, v)
 
     print("-----------------------------------")
+
+def find_chord_path(start_tuple, end_tuple):
+
+    start_node = KeyNode(start_tuple[0].lower(), start_tuple[1].lower())
+    index = common_chord_graph.index(start_node)
+    start_node = common_chord_graph[index]
+
+    levels = {}
+    queue = []
+
+    levels[start_node] = None
+    for node in start_node.get_adjacent_vertices():
+        queue.append(node)
+        levels[node] = start_node
+
+
+
+    goal_node = None
+    while queue:
+        current_node = queue.pop(0)
+        if current_node.tonic == end_tuple[0].lower() and current_node.mode == end_tuple[1].lower():
+            goal_node = current_node
+            break
+        else:
+            for node in current_node.get_adjacent_vertices():
+                if node not in set(levels.keys()):
+                    queue.append(node)
+                    levels[node] = current_node
+
+    if not goal_node:
+        return None
+
+    path = []
+    while goal_node:
+        parent = levels[goal_node]
+        if parent:
+            print(parent.tonic, parent.mode)
+            chord = parent.edges[goal_node][0]
+            path.append(chord)
+
+        goal_node = parent
+    return path[::-1]
+
+
+# path = find_chord_path(('C', 'Major'), ('c', 'minor'))
+#
+# path = [m21.chord.Chord(n) for n in path]
+#
+# stream = m21.stream.Stream()
+# for n in path:
+#     stream.append(n)
+#
+# stream.show('midi')
