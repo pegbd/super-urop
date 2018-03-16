@@ -8,6 +8,7 @@ import time
 import analyzer
 import transformer
 import copy
+import modulation
 # import concurrent.futures as fut
 
 converter = m21.converter
@@ -42,6 +43,11 @@ class SongLooper:
         self.current_rhythms = ['ORIGINAL' for i in range(len(self.parts))]
         self.current_keys = [self.initial_key for i in range(len(self.parts))]
 
+        self.modulating = False
+        self.key_modulator = modulation.KeyModulator()
+        self.modulation_progression = None
+        self.modulation_progression_index = 0
+
     def initialize(self):
         # cache the measures of each individual part
         for i in range(len(self.original_parts)):
@@ -75,7 +81,7 @@ class SongLooper:
 
         rhythm_id = self.rhythm_to_string(rhythm)
         # call the fill_ostinato function on the measures
-        ostinated_measures =  transformer.fill_ostinato(measures, rhythm)
+        ostinated_measures = transformer.fill_ostinato(measures, rhythm)
 
         # place in cache
         self.transformation_cache[rhythm_id] = ostinated_measures
@@ -135,13 +141,10 @@ class SongLooper:
 
         #set measures equal to the new measures
         self.parts = return_parts
+        self.modulating = False
 
         #get current measure
         self.current_measure_in_parts = [part[self.measure_index] for part in self.parts]
-
-    # def transform_async(self, part_indexes=None, key=None, rhythm=None):
-    #     with fut.ThreadPoolExecutor(max_workers=5) as executor:
-    #         executor.submit(self.transform, part_indexes, key, rhythm)
 
     def get_current_measure(self):
         return self.current_measure_in_parts
@@ -160,3 +163,6 @@ class SongLooper:
 
     def get_cache_key(self, part, key, rhythm):
         return "part " + str(part) + ": " + key + " " + self.rhythm_to_string(rhythm)
+
+    def set_modulation_progression(self, start_key, end_key):
+        
