@@ -1,8 +1,12 @@
 import music21 as m21
 from collections import defaultdict
 import random
+import analyzer
 
 PITCHES = ['A-', 'A', 'A#', 'B-', 'B', 'C', 'C#', 'D-', 'D', 'D#', 'E-', 'E', 'F', 'F#', 'G-', 'G', 'G#']
+WHOLE_NOTE_DURATION = 4.0
+QUARTER_NOTE_DURATION = 1.0
+BEGINNING_OF_MEASURE = 1.0
 
 class KeyNode:
     def __init__(self, tonic, mode):
@@ -185,27 +189,71 @@ class KeyModulator:
                 print (k.tonic + ' ' + k.mode, v)
             print("-----------------------------------")
 
+    def wrap_chord_analyzed(self, key, chord_tuple):
+        chord_object = m21.chord.Chord(chord_tuple)
+        # chord_object.duration = m21.duration.Duration(ql=WHOLE_NOTE_DURATION)
+        analyzed_element = analyzer.AnalyzedElement(key, chord_object, beatOffset=BEGINNING_OF_MEASURE)
+        return analyzed_element
+
     def add_cadence(self, key, mode, current_path):
+        new_key = m21.key.Key(key, mode)
+
         # I chord
         if mode.lower() == 'major':
-            current_path.append(self.tonic_by_major_key[key.upper()])
+
+            # get chord and create analyzed element with new_key as context
+            chord_tuple = self.tonic_by_major_key[key.upper()]
+            current_path.append(self.wrap_chord_analyzed(new_key, chord_tuple))
 
             # I like the sound of either dominant or diminshed 7ths in major, so randomize
             k = random.randint(0, 1)
             if k == 0:
-                current_path.append(self.dominant_7th_by_key[key.upper()])
+                seventh_chord_tuple = self.dominant_7th_by_key[key.upper()]
+                current_path.append(self.wrap_chord_analyzed(new_key, seventh_chord_tuple))
             else:
-                current_path.append(self.diminished_7th_by_key[key.upper()])
+                seventh_chord_tuple = self.diminished_7th_by_key[key.upper()]
+                current_path.append(self.wrap_chord_analyzed(new_key, seventh_chord_tuple))
         else:
             # I prefer only diminished triads in minor
-            current_path.append(self.tonic_by_minor_key[key.upper()])
-            current_path.append(self.diminished_7th_by_key[key.upper()])
+            chord_tuple = self.tonic_by_minor_key[key.upper()]
+            current_path.append(self.wrap_chord_analyzed(new_key, chord_tuple))
+
+            seventh_chord_tuple = self.diminished_7th_by_key[key.upper()]
+            current_path.append(self.wrap_chord_analyzed(new_key, seventh_chord_tuple))
 
     def add_tonic(self, key, mode, current_path):
+        key_object = m21.key.Key(key, mode)
         if mode.lower() == 'major':
-            current_path.append(self.tonic_by_major_key[key.upper()])
+            chord_tuple = self.tonic_by_major_key[key.upper()]
+            current_path.append(self.wrap_chord_analyzed(key_object, chord_tuple))
         else:
-            current_path.append(self.tonic_by_minor_key[key.upper()])
+            chord_tuple = self.tonic_by_minor_key[key.upper()]
+            current_path.append(self.wrap_chord_analyzed(key_object, chord_tuple))
+
+    def get_modulation_measures(self, num_beats_per_measure, analyzed_chords):
+        measures = []
+        for chord in analyzed_chords:
+            chord.element.duration.quarterLength = 2*QUARTER_NOTE_DURATION
+
+        num_beats_per_measure = int(num_beats_per_measure / 2)
+        measures = [analyzed_chords[i * num_beats_per_measure:(i + 1) * num_beats_per_measure] for i in range((len(analyzed_chords) + num_beats_per_measure - 1) // num_beats_per_measure)]
+        last_measure = measures[-1]
+
+        fill_difference = len(last_measure) - num_beats_per_measure
+
+        if fill_difference > 0:
+            for i in range(fill_difference + 1):
+                last_measure.append(last_measure[-1])
+
+        for m in measures:
+            off = BEGINNING_OF_MEASURE
+            for i in range(len(m)):
+                m[i].beatOffset = off + 2*float(i)
+
+        # elongate the last tonic chord
+        measures[-1][-1].element.duration.quarterLength = 4*QUARTER_NOTE_DURATION
+
+        return measures
 
     def find_chord_path(self, start_tuple, end_tuple):
 
@@ -245,25 +293,33 @@ class KeyModulator:
         while goal_node:
             parent = levels[goal_node]
             if parent:
+
                 pivot_chord = parent.edges[goal_node][0]
+                analyzed_pivot_chord = self.wrap_chord_analyzed(m21.key.Key(parent.tonic, parent.mode), pivot_chord)
 
                 # we're starting with the tonic, don't add a cadence to where we've started... (redundant)
                 if levels[parent]:
                     self.add_cadence(parent.tonic, parent.mode, path)
 
-                path.append(pivot_chord)
+                path.append(analyzed_pivot_chord)
 
             # set up next iteration of while loop, up the ancestry tree
             goal_node = parent
-
+#
         self.add_tonic(start_tuple[0], start_tuple[1], path)
         return path[::-1]
 
 
 # mod = KeyModulator()
-# path = mod.find_chord_path(('b-', 'Major'), ('a-', 'major'))
+# path = mod.find_chord_path(('b-', 'Major'), ('f', 'major'))
 #
-# path = [m21.chord.Chord(n) for n in path]
+# for p in path:
+#     print(p.element.pitches)
+#     print(p.roman, " in ", p.key)
+#     print("---------------")
+#
+#
+# path = [n.element for n in path]
 # print(path)
 #
 # stream = m21.stream.Stream()

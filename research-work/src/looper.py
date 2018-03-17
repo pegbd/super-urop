@@ -25,6 +25,7 @@ class SongLooper:
 
         self.tempo = m21.tempo.MetronomeMark(number = tempo)
         self.original_parts, self.song = analyzer.analyze(song_file)
+        self.time_signature = self.original_parts[0][0][0].timeSignature
 
         # get the key of the song
         self.initial_key = str(self.song.analyze("key")).lower()
@@ -35,23 +36,29 @@ class SongLooper:
 
         self.transformation_cache = transformation_cache = TTLCache(maxsize=50, ttl=600)
 
+        # Keep track of the current measure of music, and index, for all the parts
         self.current_measure_in_parts = [part[0] for part in self.parts]
         self.measure_index = 0
 
         self.last_measure_beat = 0
 
+        # Keep track of current rhythms and key for each individual part
         self.current_rhythms = ['ORIGINAL' for i in range(len(self.parts))]
-        self.current_keys = [self.initial_key for i in range(len(self.parts))]
+        self.current_key = self.initial_key
 
+        # all the logic for modulating the music
         self.modulating = False
         self.key_modulator = modulation.KeyModulator()
         self.modulation_progression = None
         self.modulation_progression_index = 0
+        self.modulation_complete = True
+
+        # temporary
 
     def initialize(self):
         # cache the measures of each individual part
         for i in range(len(self.original_parts)):
-            cache_key = self.get_cache_key(i, self.current_keys[i], self.current_rhythms[i])
+            cache_key = self.get_cache_key(i, self.current_key, self.current_rhythms[i])
             self.transformation_cache[cache_key] = copy.deepcopy(self.original_parts[i])
 
         self.reset()
@@ -62,11 +69,23 @@ class SongLooper:
     def reset(self):
         self.current_measure_in_parts = [part[0] for part in self.parts]
         self.measure_index = 0
-        self.last_measure_beat = 0
+        # self.last_measure_beat = 0
 
     def step(self, beat):
-        self.measure_index = (self.measure_index + 1) % self.length
-        self.current_measure_in_parts = [part[self.measure_index] for part in self.parts]
+        if not self.modulating:
+            self.measure_index = (self.measure_index + 1) % self.length
+            self.current_measure_in_parts = [part[self.measure_index] for part in self.parts]
+
+        else:
+            if self.modulation_progression:
+                self.modulation_progression_index = (self.modulation_progression_index + 1) % len(self.modulation_progression)
+
+                # check to see if modulation has completed at least once
+                if self.modulation_progression_index == len(self.modulation_progression) - 1:
+                    self.modulation_complete = True
+
+                self.current_measure_in_parts = [self.modulation_progression[self.modulation_progression_index]]
+
         self.last_measure_beat = beat
 
     def _transform_key(self, measures, tonic, mode):
@@ -105,7 +124,10 @@ class SongLooper:
 
                 # check both key and rhythms
                 if key == None:
-                    key = self.current_keys[i]
+                    key = self.current_key
+                else:
+                    self.modulating = True
+                    self.modulation_complete = False
 
                 if rhythm == None:
                     rhythm = copy.deepcopy(self.current_rhythms[i])
@@ -131,7 +153,7 @@ class SongLooper:
                     return_measures = self._transform_key(base_rhythm_measures, tonic, mode)
 
                     #set current key and current rhythm for this part
-                    self.current_keys[i] = key
+                    self.current_key = key # TODO: Currently setting key multiple times
                     self.current_rhythms[i] = rhythm
 
                     #cache results
@@ -139,12 +161,19 @@ class SongLooper:
 
                 return_parts.append(return_measures)
 
+        # wait for the full modulation to complete:
+        while not self.modulation_complete:
+            pass # block and do nothing
+
         #set measures equal to the new measures
         self.parts = return_parts
         self.modulating = False
 
         #get current measure
         self.current_measure_in_parts = [part[self.measure_index] for part in self.parts]
+
+        # TODO: Decide if we want to reset to the beginning of the song after each key change
+        self.reset()
 
     def get_current_measure(self):
         return self.current_measure_in_parts
@@ -165,4 +194,6 @@ class SongLooper:
         return "part " + str(part) + ": " + key + " " + self.rhythm_to_string(rhythm)
 
     def set_modulation_progression(self, start_key, end_key):
-        
+        progression = self.key_modulator.find_chord_path(start_key, end_key)
+        progression_measures = self.key_modulator.get_modulation_measures(self.time_signature.numerator, progression)
+        self.modulation_progression = progression_measures

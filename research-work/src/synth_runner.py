@@ -85,6 +85,7 @@ class MainWidget(BaseWidget) :
                     #retrieve the specific element in the measure
                     element = part[j]
                     dur = element.element.duration.quarterLength
+
                     # ge millisecond timestamps that the element will be scheduled on
                     on_tick = now_tick + element.beatOffset*kTicksPerQuarter
                     off_tick = on_tick + kTicksPerQuarter*dur
@@ -121,8 +122,6 @@ class TransformationWidget(MainWidget):
         self.default_volume = 88
         self.volume_delta = 4
         self.current_volume = self.default_volume
-        self.crescendo = False
-        self.decrescendo = False
 
         # tempo control
         self.tempo_delta = 8.0
@@ -148,7 +147,16 @@ class TransformationWidget(MainWidget):
     #### Key and Mode ####
     def keyChanged(self):
         new_key = self.note_letter + self.accidental_letter + ' ' + self.mode
-        self.executor.submit(self.looper.transform, None, new_key, None)
+        if new_key != self.looper.current_key:
+            # split the tonic from the mode
+            k = self.looper.current_key.split(' ')
+            nk = new_key.split(' ')
+
+            # set the modulation progression from old key to new key
+            self.looper.set_modulation_progression((k[0], k[1]), (nk[0], nk[1]))
+
+            # submit the actual transformation task to the executor
+            self.executor.submit(self.looper.transform, None, new_key, None)
 
     def checkKeyChange(self, note, accidental, mode):
         # if this results in a key change, then calculate the new transformation
@@ -160,7 +168,6 @@ class TransformationWidget(MainWidget):
             self.keyChanged()
 
     def switchInstruments(self, patch):
-        self.decrescendo = True
         for i in range(len(self.looper.parts)):
             self.synth.program(i, 0, patch)
 
@@ -169,21 +176,6 @@ class TransformationWidget(MainWidget):
             self.synth.cc(i, 7, self.current_volume)
 
     def on_update(self):
-        if self.decrescendo:
-            if self.current_volume > 0:
-                self.current_volume -= self.volume_delta
-                self.setVolume()
-            else:
-                self.decrescendo = False
-                self.crescendo = True
-
-        if self.crescendo:
-            if self.current_volume < self.default_volume:
-                self.current_volume += self.volume_delta
-                self.setVolume()
-            else:
-                self.crescendo = False
-
         super(TransformationWidget, self).on_update()
 
 
