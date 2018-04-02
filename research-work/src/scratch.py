@@ -2,6 +2,8 @@ import av_grid
 import matplotlib.pyplot as plt
 import analyzer
 import music21 as m21
+import random
+import os
 
 # tempo_grid = av_grid.TempoGrid()
 # tempo_grid.parse_point_file('./av-grid-points/tempo.txt')
@@ -31,7 +33,29 @@ import music21 as m21
 #
 # print(an.in_new_key(nk).element.nameWithOctave)
 
-scale1 = m21.scale.MajorScale('a')
-pitches1 = [str(p) for p in scale1.getPitches('C4', 'G5')]
+# scale1 = m21.scale.MajorScale('a')
+# pitches1 = [str(p) for p in scale1.getPitches('C4', 'G5')]
+#
+# print (pitches1[:-4])
 
-print (pitches1[:-4])
+f = open('./av-grid-points/rhythm.txt', 'w')
+
+for i in range(1,5):
+    for j in range(1,5):
+        for k in range(1,5):
+            for l in range(1,5):
+                line = str(i) + ' ' + str(j) + ' ' + str(k) + ' ' + str(l)
+                random_arousal = random.random() - 0.5
+                random_arousal /= 0.5
+
+                random_valence = random.random() - 0.5
+                random_valence /= 0.5
+
+                line += '\t' + str(random_arousal) + '\t' + str(random_valence) + '\n'
+
+                print(line)
+                f.write(line)
+                f.flush()
+                os.fsync(f.fileno())
+
+f.close()

@@ -223,11 +223,29 @@ class RhythmGrid(AVGrid):
     def __init__(self):
         super(RhythmGrid, self).__init__()
 
-    def insert(self):
-        pass
+    def insert(self, value, arousal, valence):
+
+        assert len(value) == 4
+
+        # use ancestor's insert method with new value
+        super(RhythmGrid, self).insert(value, arousal, valence)
+
 
     def parse_point_file(self, filepath):
-        pass
+
+        # open text file
+        f = open(filepath, 'r')
+
+        # read all regions
+        for line in f.readlines():
+            line = line.strip().split('\t')
+
+            value = tuple([int(n) for n in line[0].split(' ')])
+            print(value)
+            # print(line[1].split(' '))
+            point = [float(i) for i in line[1:]]
+
+            self.insert(value, point[0], point[1])
 
 
 

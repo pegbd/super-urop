@@ -53,6 +53,8 @@ class SongLooper:
         self.modulation_progression_index = 0
         self.modulation_complete = True
 
+        self.target_rhythm = None
+
         # temporary
 
     def initialize(self):
@@ -97,13 +99,15 @@ class SongLooper:
         return transposed_measures
 
     def _transform_rhythm(self, measures, rhythm):
-
+        print("GOT HERE")
         rhythm_id = self.rhythm_to_string(rhythm)
+        print("GOT HERE YAYAYAY")
         # call the fill_ostinato function on the measures
         ostinated_measures = transformer.fill_ostinato(measures, rhythm)
-
+        print("HERE jdsadjslkadjslakdj")
         # place in cache
         self.transformation_cache[rhythm_id] = ostinated_measures
+        print(" FINAL HERE????")
 
         # set measures equal to the new measures
         # self.parts = ostinated_measures
@@ -141,10 +145,15 @@ class SongLooper:
                 # if not, generate the transformation
                 if return_measures == None:
                     rhythm_id = self.rhythm_to_string(rhythm)
+                    print("HERE1")
                     base_rhythm_measures = self.transformation_cache.get(self.get_cache_key(i, self.initial_key, rhythm_id))
-
+                    print("HERE 222222")
                     if base_rhythm_measures == None:
+                        print("HERE 333333")
                         base_rhythm_measures = self._transform_rhythm(self.original_parts[i], rhythm)
+                        print("HERE 4444444")
+
+                    print(base_rhythm_measures)
 
                     k = key.split(" ")
                     tonic = k[0]
@@ -193,7 +202,11 @@ class SongLooper:
     def get_cache_key(self, part, key, rhythm):
         return "part " + str(part) + ": " + key + " " + self.rhythm_to_string(rhythm)
 
-    def set_modulation_progression(self, start_key, end_key):
+    def set_modulation_progression(self, start_key, end_key, rhythm=None):
         progression = self.key_modulator.find_chord_path(start_key, end_key)
         progression_measures = self.key_modulator.get_modulation_measures(self.time_signature.numerator, progression)
         self.modulation_progression = progression_measures
+
+        if rhythm:
+            print("HEERERERERERERE")
+            self.modulation_progression = transformer.fill_ostinato(progression_measures, rhythm)

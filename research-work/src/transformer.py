@@ -6,6 +6,7 @@ from collections import defaultdict
 from random import shuffle
 import copy
 import unittest
+import random
 
 # TODO: Test cases at the bottom of each test case
 # class TransformationTests(unittest.TestCase):
@@ -163,18 +164,18 @@ def replace_rests(measures):
         non_rest_elements = list(filter(lambda x: not x.is_rest(), measure))
 
         if len(non_rest_elements) == 0:
-            raise ValueError('There are no notes or chords in this measure')
+            if altered_measures:
+                measure = altered_measures[-1]
+                altered_measures.append(measure)
+                continue
+            else:
+                continue
 
         for i in range(len(measure)):
             element = measure[i]
 
             if element.is_rest():
-                if i == 0:
-                    index = i+1
-                else:
-                    index = i-1
-
-                replace_element = non_rest_elements[index]
+                replace_element = random.choice(non_rest_elements)
                 new_element = copy.deepcopy(replace_element.element)
                 m.append(element.copy(element=new_element))
 
