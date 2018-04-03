@@ -13,6 +13,18 @@ import looper
 import av_grid
 import concurrent.futures as fut
 
+STRING_PATCH = 48
+BRASS_PATCH = 61
+
+## CC CHANNELS ##
+VIBRATO_CC = 1
+VOLUME_CC = 7
+PAN_CC = 10
+EXPRESSION_CC = 11
+SUSTAIN_CC = 64
+REVERB_CC = 91
+CHORUS_CC = 93
+
 class MainWidget(BaseWidget) :
     def __init__(self):
         super(MainWidget, self).__init__()
@@ -31,10 +43,17 @@ class MainWidget(BaseWidget) :
 
         # Set up FluidSynth
         self.synth = Synth('./synth_data/FluidR3_GM.sf2')
+        self.note_velocity = 127
 
         # set up a midi channel for each part
         for i in range(len(self.looper.parts)):
             self.synth.program(i, 0, 0)
+
+            # set the reverb
+            self.synth.cc(i, REVERB_CC, 127)
+
+            # set the EXPRESSION_CC
+            self.synth.cc(i, EXPRESSION_CC, 100)
 
         # connect scheduler into audio system
         self.audio.set_generator(self.sched)
@@ -55,8 +74,8 @@ class MainWidget(BaseWidget) :
         # concurrent processing of transformations
         self.executor = fut.ThreadPoolExecutor(max_workers=4)
 
-    def on_cmd(self,tick, pitch, channel):
-        self.synth.noteon(channel, pitch, 100)
+    def on_cmd(self,tick, pitch, channel, velocity):
+        self.synth.noteon(channel, pitch, velocity)
 
     def off_cmd(self,tick, pitch, channel):
         self.synth.noteoff(channel, pitch)
@@ -83,7 +102,7 @@ class MainWidget(BaseWidget) :
                     pitch = element.element.pitch.midi
 
                     # schedule note on
-                    self.sched.post_at_tick(on_tick, self.on_cmd, pitch, i)
+                    self.sched.post_at_tick(on_tick, self.on_cmd, pitch, i, self.note_velocity)
 
                     # schedule note off
                     self.sched.post_at_tick(off_tick, self.off_cmd, pitch, i)
@@ -94,7 +113,7 @@ class MainWidget(BaseWidget) :
 
                     # schedule off and on events for each pitch in the chord
                     for pitch in pitches:
-                        self.sched.post_at_tick(on_tick, self.on_cmd, pitch, i)
+                        self.sched.post_at_tick(on_tick, self.on_cmd, pitch, i, self.note_velocity)
                         self.sched.post_at_tick(off_tick, self.off_cmd, pitch, i)
 
     def on_update(self):
@@ -198,13 +217,28 @@ class TransformationWidget(MainWidget):
         self.rhythm_changing = False
 
     ### Instrument ###
-    def switchInstruments(self, patch):
+    def switchInstruments(self, patches):
+        print("switching instruments")
+        # if not enough instruments from this point, fill with string and brass
+        count = 0
+        while len(patches) < len(self.looper.parts):
+            if count % 2 == 0:
+                patches.append(STRING_PATCH)
+            else:
+                patches.append(BRASS_PATCH)
+
+            count += 1
+
+        # apply instrument patches to synth
         for i in range(len(self.looper.parts)):
-            self.synth.program(i, 0, patch)
+            print(patches[i])
+            self.synth.program(i, 0, patches[i])
+
+
 
     def setVolume(self):
         for i in range(len(self.looper.parts)):
-            self.synth.cc(i, 7, self.current_volume)
+            self.synth.cc(i, VOLUME_CC, self.current_volume)
 
     def on_update(self):
         super(TransformationWidget, self).on_update()
@@ -315,7 +349,7 @@ class ArousalValenceWidget(TransformationWidget):
         self.rhythm_grid.parse_point_file('./av-grid-points/rhythm.txt')
 
         self.instrument_grid = av_grid.InstrumentGrid()
-        self.instrument_grid.parse_point_file('./av-grid-points/instruments.txt')
+        self.instrument_grid.parse_point_file('./av-grid-points/instruments_multi.txt')
 
         self.key_grid = av_grid.KeySignatureGrid()
         self.key_grid.parse_point_file('./av-grid-points/key.txt')
@@ -324,6 +358,11 @@ class ArousalValenceWidget(TransformationWidget):
 
         # print(arousal)
         # print(valence)
+
+        try:
+            self.change_note_velocity(arousal)
+        except Exception as e:
+            pass
 
         try:
             # tempo
@@ -343,10 +382,9 @@ class ArousalValenceWidget(TransformationWidget):
         try:
             # instrument
             instrument_point, _ = self.instrument_grid.sample_parameter_point(arousal, valence)
-            self.switchInstruments(instrument_point.get_value())
+            self.switchInstruments(list(instrument_point.get_value()))
         except Exception as e:
-            pass
-
+            print("couldn't switch instruments")
 
         try:
             # key
@@ -358,6 +396,16 @@ class ArousalValenceWidget(TransformationWidget):
 
         self.checkKeyAndRhythmChange()
 
+    def change_note_velocity(self, arousal):
+        max_velocity = 127
+
+        arousal += 1.0
+        arousal /= 2.0
+
+        velocity = max_velocity * arousal
+        print(velocity)
+
+        self.note_velocity = max(50, int(velocity))
 
 
     def on_update(self):

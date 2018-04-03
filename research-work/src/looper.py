@@ -99,15 +99,14 @@ class SongLooper:
         return transposed_measures
 
     def _transform_rhythm(self, measures, rhythm):
-        print("GOT HERE")
+
         rhythm_id = self.rhythm_to_string(rhythm)
-        print("GOT HERE YAYAYAY")
+
         # call the fill_ostinato function on the measures
         ostinated_measures = transformer.fill_ostinato(measures, rhythm)
-        print("HERE jdsadjslkadjslakdj")
+
         # place in cache
         self.transformation_cache[rhythm_id] = ostinated_measures
-        print(" FINAL HERE????")
 
         # set measures equal to the new measures
         # self.parts = ostinated_measures
@@ -116,9 +115,24 @@ class SongLooper:
         return ostinated_measures
 
     def transform(self, part_indexes=None, key=None, rhythm=None):
-        if part_indexes == None:
+
+        key_change = False
+        rhythm_change = False
+
+        # check both key and rhythms changing
+        if key is not None:
+            self.modulating = True
+            self.modulation_complete = False
+            self.modulation_progression_index = 0
+            key_change = True
+
+        if rhythm is not None:
+            rhythm_change = True
+
+        if part_indexes is None:
             part_indexes = [i for i in range(len(self.parts))]
 
+        ## ITERATION STEP ##
         return_parts = []
         for i in range(len(self.parts)):
 
@@ -129,9 +143,6 @@ class SongLooper:
                 # check both key and rhythms
                 if key == None:
                     key = self.current_key
-                else:
-                    self.modulating = True
-                    self.modulation_complete = False
 
                 if rhythm == None:
                     rhythm = copy.deepcopy(self.current_rhythms[i])
@@ -144,26 +155,27 @@ class SongLooper:
 
                 # if not, generate the transformation
                 if return_measures == None:
-                    rhythm_id = self.rhythm_to_string(rhythm)
-                    print("HERE1")
-                    base_rhythm_measures = self.transformation_cache.get(self.get_cache_key(i, self.initial_key, rhythm_id))
-                    print("HERE 222222")
-                    if base_rhythm_measures == None:
-                        print("HERE 333333")
-                        base_rhythm_measures = self._transform_rhythm(self.original_parts[i], rhythm)
-                        print("HERE 4444444")
+                    if rhythm_change and key_change:
+                        rhythm_id = self.rhythm_to_string(rhythm)
+                        base_rhythm_measures = self.transformation_cache.get(self.get_cache_key(i, self.initial_key, rhythm_id))
 
-                    print(base_rhythm_measures)
+                        if base_rhythm_measures == None:
+                            base_rhythm_measures = self._transform_rhythm(self.original_parts[i], rhythm)
 
-                    k = key.split(" ")
-                    tonic = k[0]
-                    mode = k[1]
+                        k = key.split(" ")
+                        tonic = k[0]
+                        mode = k[1]
 
-                    return_measures = self._transform_key(base_rhythm_measures, tonic, mode)
+                        return_measures = self._transform_key(base_rhythm_measures, tonic, mode)
 
-                    #set current key and current rhythm for this part
-                    self.current_key = key # TODO: Currently setting key multiple times
-                    self.current_rhythms[i] = rhythm
+                        #set current key and current rhythm for this part
+                        self.current_key = key # TODO: Currently setting key multiple times
+                        self.current_rhythms[i] = rhythm
+
+                    elif rhythm_change and not key_change:
+                        return_measures = self._transform_rhythm(self.parts[i], rhythm)
+                    elif key_change and not rhythm_change:
+                        return_measures = self._transform_key(self.parts[i], tonic, mode)
 
                     #cache results
                     self.transformation_cache[cache_key] = return_measures
@@ -206,7 +218,6 @@ class SongLooper:
         progression = self.key_modulator.find_chord_path(start_key, end_key)
         progression_measures = self.key_modulator.get_modulation_measures(self.time_signature.numerator, progression)
         self.modulation_progression = progression_measures
-
+        self.modulation_progression_index = 0
         if rhythm:
-            print("HEERERERERERERE")
             self.modulation_progression = transformer.fill_ostinato(progression_measures, rhythm)

@@ -151,12 +151,13 @@ class InstrumentGrid(AVGrid):
 
     def insert(self, value, arousal, valence):
 
-        # use minimum and maximum tempo bounds
-        value = max(value, 0)
-        value = min(value, len(self.instruments) - 1)
+        # use minimum and maximum instrument bounds
+        for i in range(len(value)):
+            value[i] = max(value[i], 0)
+            value[i] = min(value[i], len(self.instruments) - 1)
 
         # use ancestor's insert method with new value
-        super(InstrumentGrid, self).insert(value, arousal, valence)
+        super(InstrumentGrid, self).insert(tuple(value), arousal, valence)
 
     def parse_point_file(self, filepath):
         # open text file
@@ -166,10 +167,13 @@ class InstrumentGrid(AVGrid):
         for line in f.readlines():
             line = line.strip().split('\t')
 
-            value = int(line[0])
-            # print(line[1].split(' '))
-            point = [float(i) for i in line[1:]]
+            value = [int(n) for n in line[0:-2] if n is not '']
+            print(value)
 
+            # print(line[1].split(' '))
+            point = [float(i) for i in line[-2:]]
+            print(point)
+            
             self.insert(value, point[0], point[1])
 
 
