@@ -1,0 +1,35 @@
+c  major	0.000	0.000
+g  major	1.00	1.000
+c  major	-1.00	1.000
+c  minor	1.00	-1.000
+a  minor	-1.00	-1.000
+g  major	0.700	0.750
+g  major	0.600	0.550
+g  major	0.500	0.750
+f  major	0.250	0.750
+f  major	0.200	0.175
+f  major	0.100	0.750
+c  major	0.100	0.250
+c  major	0.000	0.300
+c  major	-0.700	0.750
+c  major	-0.600	0.550
+c  major	-0.500	0.750
+b - major	-0.250	0.750
+b - major	-0.200	0.175
+b - major	-0.100	0.750
+a - major	-0.100	0.250
+c  minor	0.700	-0.750
+c  minor	0.600	-0.550
+c  minor	0.500	-0.750
+c  minor	0.250	-0.750
+c  minor	0.200	-0.175
+c  minor	0.100	-0.750
+c  minor	0.100	-0.250
+c  minor	0.000	-0.300
+a  minor	-0.700	-0.750
+a  minor	-0.600	-0.550
+a  minor	-0.500	-0.750
+a  minor	-0.250	-0.750
+a  minor	-0.200	-0.175
+a  minor	-0.100	-0.750
+a  minor	-0.100	-0.250

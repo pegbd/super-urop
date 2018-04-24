@@ -7,6 +7,7 @@ from random import shuffle
 import copy
 import unittest
 import random
+import analyzer
 
 # TODO: Test cases at the bottom of each test case
 # class TransformationTests(unittest.TestCase):
@@ -52,7 +53,7 @@ def fill_ostinato(measures, rhythm):
     assert(len(rhythm) == 4)
 
     # ostinato doesn't currently work on rests, so replace them with notes
-    measures = replace_rests(measures)
+    # measures = replace_rests(measures)
 
     ostinated_measures = []
     for measure in measures:
@@ -66,79 +67,87 @@ def fill_ostinato(measures, rhythm):
 
         # map each element to its previous strong beat
         for element in measure:
-            # previous quarter note beat number
-            beat = int(element.beatOffset)
+            if not element.is_rest():
+                # previous quarter note beat number
+                beat = int(element.beatOffset)
 
-            # place the element to its prev beat.
-            prev_elements_on_beats[beat].append(element)
+                # place the element to its prev beat.
+                prev_elements_on_beats[beat].append(element)
+
+        beat_to_element_keys = prev_elements_on_beats.keys()
 
         for i in range(len(rhythm)):
             # current quarter note beat == i + 1
             elements = []
             cur_index = i + 1
 
-            # find elements. if current index beat doesn't have note attacks, look at previous beats
-            # this takes care of the case where the previous element has duration > quarter length (i.e. a half note),
-            # such that the next beat has no attack (and thus no elements)
-            while len(elements) == 0 and cur_index > 0:
-                elements = prev_elements_on_beats[cur_index]
-                cur_index -= 1
+            if cur_index not in beat_to_element_keys:
+                rest_element = m21.note.Rest()
+                rest_element.duration =  m21.duration.Duration(quarterLength=1.0)
 
-            # if there are still no elements.
-            if len(elements) == 0:
-                raise ValueError('This song has no notes...')
+                analyzed_rest = analyzer.AnalyzedElement(m21.key.Key('c', 'major'), rest_element, beatOffset=cur_index)
+                m.append(analyzed_rest)
 
-            # 1 = quarter, 2 = eighth, 3 = eighth triplet, 4 = sixteenth notes, etc.
-            num_elements_for_rhythm = rhythm[i]
-            ql = 1.0/num_elements_for_rhythm
+            else:
+                # find elements. if current index beat doesn't have note attacks, look at previous beats
+                # this takes care of the case where the previous element has duration > quarter length (i.e. a half note),
+                # such that the next beat has no attack (and thus no elements)
+                while len(elements) == 0 and cur_index > 0:
+                    if cur_index in beat_to_element_keys:
+                        elements = prev_elements_on_beats[cur_index]
+                    cur_index -= 1
 
-            # if there are equal notes as required for the new rhythm
-            if num_elements_for_rhythm == len(elements):
-                for element in elements:
-                    new_element = copy.deepcopy(element.element)
-                    new_element.duration = m21.duration.Duration(quarterLength=ql)
+                # 1 = quarter, 2 = eighth, 3 = eighth triplet, 4 = sixteenth notes, etc.
+                num_elements_for_rhythm = rhythm[i]
+                ql = 1.0/num_elements_for_rhythm
 
-                    m.append(element.copy(element=new_element))
+                # if there are equal notes as required for the new rhythm
+                if num_elements_for_rhythm == len(elements):
+                    for element in elements:
+                        new_element = copy.deepcopy(element.element) # TODO: Deep copying can be slow
+                        new_element.duration = m21.duration.Duration(quarterLength=ql)
 
-            elif num_elements_for_rhythm > len(elements):
-                # divide the rhythm evenly along notes
-                times = [int(num_elements_for_rhythm/len(elements)) for n in range(len(elements))]
+                        m.append(element.copy(element=new_element))
 
-                extra = num_elements_for_rhythm % len(elements)
+                elif num_elements_for_rhythm > len(elements):
+                    # divide the rhythm evenly along notes
+                    times = [int(num_elements_for_rhythm/len(elements)) for n in range(len(elements))]
 
-                # if not even, add extra notes from the beginning
-                if extra != 0:
-                    for x in range(extra):
-                        times[x] += 1
+                    extra = num_elements_for_rhythm % len(elements)
 
-                internal_offset = 0
-                for j in range(len(elements)):
-                    element = elements[j]
-                    t = times[j]
+                    # if not even, add extra notes from the beginning
+                    if extra != 0:
+                        for x in range(extra):
+                            times[x] += 1
 
-                    # t = some integer
-                    for repeat in range(t):
-                        offset = (i + 1) + (internal_offset)*ql
+                    internal_offset = 0
+                    for j in range(len(elements)):
+                        element = elements[j]
+                        t = times[j]
+
+                        # t = some integer
+                        for repeat in range(t):
+                            offset = (i + 1) + (internal_offset)*ql
+
+                            new_element = copy.deepcopy(element.element) #TODO Deep copy might be slow
+                            new_element.duration = m21.duration.Duration(quarterLength=ql)
+
+                            m.append(element.copy(element=new_element, beatOffset=offset))
+                            internal_offset += 1
+
+                else:
+                    first = elements[::2]
+                    then = elements[1::2]
+
+                    seq = first + then
+                    for j in range(num_elements_for_rhythm):
+                        element = seq[j]
 
                         new_element = copy.deepcopy(element.element)
                         new_element.duration = m21.duration.Duration(quarterLength=ql)
 
+                        offset = (i + 1) + j*ql
                         m.append(element.copy(element=new_element, beatOffset=offset))
-                        internal_offset += 1
-
-            else:
-                first = elements[::2]
-                then = elements[1::2]
-
-                seq = first + then
-                for j in range(num_elements_for_rhythm):
-                    element = seq[j]
-
-                    new_element = copy.deepcopy(element.element)
-                    new_element.duration = m21.duration.Duration(quarterLength=ql)
-
-                    offset = (i + 1) + j*ql
-                    m.append(element.copy(element=new_element, beatOffset=offset))
 
         ostinated_measures.append(m)
 

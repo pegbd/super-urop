@@ -66,6 +66,28 @@ e  major	-0.267	0.333
 f  major	-0.443	0.314
 e - major	-0.223	0.453
 e  major	-0.267	0.191
+c  major	-0.067	0.190
+b - major	-0.443	0.119
+e  minor	-0.800	0.049
+g  major	-0.167	0.286
+e  major	-0.267	0.237
+f  major	-0.333	0.429
+e - major	-0.333	0.310
+e  major	-0.467	-0.381
+c  major	0.110	0.400
+b - major	-0.333	-0.237
+e  minor	-0.667	0.453
+g  major	-0.167	-0.357
+e  major	-0.443	-0.667
+f  major	-0.390	-0.049
+e - major	0.110	0.477
+e  major	-0.723	-0.800
+c  major	-0.557	-0.881
+b - major	-0.200	0.286
+e  minor	-0.600	-0.643
+g  major	-0.600	0.166
+e  major	-0.723	-0.237
+f  major	-0.333	0.357
 b  minor	0.167	-0.844
 b - minor	0.557	-0.769
 c  minor	-0.223	-0.669
@@ -76,6 +98,26 @@ c  minor	0.667	-0.639
 g  minor	0.000	-0.687
 d  minor	0.200	-0.664
 d  minor	0.500	-0.636
+b  minor	-0.110	-0.592
+b - minor	0.277	-0.673
+c  minor	0.667	-0.646
+a  minor	0.333	-0.666
+e - minor 	0.223	-0.698
+c  minor	-0.400	-0.558
+c  minor	-0.390	-0.558
+g  minor	0.277	-0.741
+d  minor	-0.133	-0.660
+d  minor	0.777	-0.700
+b  minor	0.400	-0.680
+b - minor	-0.333	-0.514
+c  minor	0.500	-0.511
+a  minor	0.000	-0.502
+e - minor 	-0.067	-0.466
+c  minor	-0.067	-0.558
+c  minor	0.000	-0.506
+g  minor	-0.667	-0.412
+d  minor	-0.500	-0.318
+d  minor	-0.467	-0.316
 c  minor	0.390	-0.904
 d  minor	0.500	-0.841
 f # minor	0.800	-0.850
@@ -86,3 +128,23 @@ g # minor	0.867	-0.769
 e  minor	0.667	-0.823
 d  minor	0.400	-0.817
 d  minor	0.400	-0.721
+c  minor	0.333	-0.759
+d  minor	0.000	-0.762
+f # minor	0.557	-0.707
+a  minor	0.557	-0.731
+e  minor	0.057	-0.743
+e  minor	0.500	-0.708
+g # minor	0.133	-0.701
+e  minor	0.600	-0.665
+d  minor	0.667	-0.616
+d  minor	0.467	-0.626
+c  minor	0.390	-0.707
+d  minor	0.667	-0.605
+f # minor	0.333	-0.520
+a  minor	0.223	-0.544
+e  minor	-0.110	-0.548
+e  minor	0.277	-0.510
+g # minor	-0.333	-0.459
+e  minor	0.223	-0.445
+d  minor	-0.610	-0.286
+d  minor	-0.467	-0.310

@@ -5,7 +5,7 @@ import numpy as np
 import copy
 
 DISTANCE_EXPONENT = 2.0
-DISTANCE_CUTOFF = 0.40
+DISTANCE_CUTOFF = 0.45
 
 class AVGrid:
 
@@ -173,7 +173,7 @@ class InstrumentGrid(AVGrid):
             # print(line[1].split(' '))
             point = [float(i) for i in line[-2:]]
             print(point)
-            
+
             self.insert(value, point[0], point[1])
 
 

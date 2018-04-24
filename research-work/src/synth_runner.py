@@ -12,6 +12,7 @@ import transformer
 import looper
 import av_grid
 import concurrent.futures as fut
+import time
 
 STRING_PATCH = 48
 BRASS_PATCH = 61
@@ -30,7 +31,7 @@ class MainWidget(BaseWidget) :
         super(MainWidget, self).__init__()
 
         self.audio = Audio(2) # set up audio
-        self.song_path = '../scores/tetris.xml' # set song path
+        self.song_path = '../scores/mario-song.musicxml' # set song path
 
         # create TempoMap, AudioScheduler
         self.tempo = 120 #TODO: grab tempo from file
@@ -47,13 +48,20 @@ class MainWidget(BaseWidget) :
 
         # set up a midi channel for each part
         for i in range(len(self.looper.parts)):
-            self.synth.program(i, 0, 0)
+
+            base_channel = 2*i
+            switch_channel = 2*i + 1
+
+            self.synth.program(base_channel, 0, 0)
+            self.synth.program(switch_channel, 0, 0)
 
             # set the reverb
-            self.synth.cc(i, REVERB_CC, 127)
+            self.synth.cc(base_channel, REVERB_CC, 127)
+            self.synth.cc(switch_channel, REVERB_CC, 127)
 
             # set the EXPRESSION_CC
-            self.synth.cc(i, EXPRESSION_CC, 100)
+            self.synth.cc(base_channel, EXPRESSION_CC, 100)
+            self.synth.cc(base_channel, EXPRESSION_CC, 100)
 
         # connect scheduler into audio system
         self.audio.set_generator(self.sched)
@@ -82,7 +90,7 @@ class MainWidget(BaseWidget) :
 
     def measure_update(self, now_beat, now_tick):
         # next step in the loop
-        self.looper.step(now_beat)
+        self.looper.step(now_beat + 1)
 
         # schedule each element that appears within the measure
         for i in range(len(self.looper.current_measure_in_parts)):
@@ -94,18 +102,20 @@ class MainWidget(BaseWidget) :
                 dur = element.element.duration.quarterLength
 
                 # ge millisecond timestamps that the element will be scheduled on
-                on_tick = now_tick + element.beatOffset*kTicksPerQuarter
+                on_tick = now_tick + (element.beatOffset + 1)*kTicksPerQuarter
                 off_tick = on_tick + kTicksPerQuarter*dur
 
                 # if the element is a note
                 if element.is_note():
                     pitch = element.element.pitch.midi
 
-                    # schedule note on
-                    self.sched.post_at_tick(on_tick, self.on_cmd, pitch, i, self.note_velocity)
+                    # schedule note on and off
+                    self.sched.post_at_tick(on_tick, self.on_cmd, pitch, 2*i, self.note_velocity)
+                    self.sched.post_at_tick(off_tick, self.off_cmd, pitch, 2*i)
 
-                    # schedule note off
-                    self.sched.post_at_tick(off_tick, self.off_cmd, pitch, i)
+                    # switch channel should mirror silently
+                    self.sched.post_at_tick(on_tick, self.on_cmd, pitch, 2*i + 1, self.note_velocity)
+                    self.sched.post_at_tick(off_tick, self.off_cmd, pitch, 2*i + 1)
 
                 # else if the element is a chord
                 elif element.is_chord():
@@ -113,8 +123,12 @@ class MainWidget(BaseWidget) :
 
                     # schedule off and on events for each pitch in the chord
                     for pitch in pitches:
-                        self.sched.post_at_tick(on_tick, self.on_cmd, pitch, i, self.note_velocity)
-                        self.sched.post_at_tick(off_tick, self.off_cmd, pitch, i)
+                        self.sched.post_at_tick(on_tick, self.on_cmd, pitch, 2*i, self.note_velocity)
+                        self.sched.post_at_tick(off_tick, self.off_cmd, pitch, 2*i)
+
+                        # swtich channel should mirror silently
+                        self.sched.post_at_tick(on_tick, self.on_cmd, pitch, 2*i + 1, self.note_velocity)
+                        self.sched.post_at_tick(off_tick, self.off_cmd, pitch, 2*i + 1)
 
     def on_update(self):
         self.audio.on_update()
@@ -128,10 +142,11 @@ class MainWidget(BaseWidget) :
 
         # take the difference, and see if it falls within the buffer-zone
         diff = now_beat - previous_beat
-        mb = 4
+        mb = 3
 
         if (diff >= mb):
-            self.executor.submit(self.measure_update, now_beat, now_tick)
+            # self.executor.submit(self.measure_update, now_beat, now_tick)
+            self.measure_update(now_beat, now_tick)
 
         self.label.text = self.sched.now_str() + '\n'
         self.label.text += 'key = ' + self.note_letter + self.accidental_letter + ' ' + self.mode + '\n'
@@ -152,6 +167,8 @@ class TransformationWidget(MainWidget):
         # keep track of key and rhythms
         self.key_changing = False
         self.rhythm_changing = False
+
+        self.checking_transformation_done = False
 
     #### TEMPO ###
     def tempoChanged(self):
@@ -175,15 +192,10 @@ class TransformationWidget(MainWidget):
     def keyChanged(self, rhythm = None):
         new_key = self.note_letter + self.accidental_letter + ' ' + self.mode
         if new_key != self.looper.current_key:
-            # split the tonic from the mode
-            k = self.looper.current_key.split(' ')
-            nk = new_key.split(' ')
-
-            # set the modulation progression from old key to new key
-            self.looper.set_modulation_progression((k[0], k[1]), (nk[0], nk[1]), rhythm)
-
             # # submit the actual transformation task to the executor
             self.executor.submit(self.looper.transform, None, new_key, rhythm)
+
+            # self.looper.transform(None, new_key, rhythm)
 
 
     def rhythmChanged(self):
@@ -205,20 +217,8 @@ class TransformationWidget(MainWidget):
             self.current_rhythm = rhythm
             self.rhythm_changing = True
 
-    def checkKeyAndRhythmChange(self):
-        if self.key_changing and not self.rhythm_changing:
-            self.keyChanged()
-        elif self.rhythm_changing and not self.key_changing:
-            self.rhythmChanged()
-        elif self.key_changing and self.rhythm_changing:
-            self.keyChanged(self.current_rhythm)
-
-        self.key_changing = False
-        self.rhythm_changing = False
-
     ### Instrument ###
     def switchInstruments(self, patches):
-        print("switching instruments")
         # if not enough instruments from this point, fill with string and brass
         count = 0
         while len(patches) < len(self.looper.parts):
@@ -229,10 +229,33 @@ class TransformationWidget(MainWidget):
 
             count += 1
 
-        # apply instrument patches to synth
+        # apply instrument patches to synth base channels, and play switch channels louder
         for i in range(len(self.looper.parts)):
-            print(patches[i])
-            self.synth.program(i, 0, patches[i])
+
+            # switch instruments base channels and make them quiet
+            self.synth.program(2*i, 0, patches[i])
+            self.setChannelVolume(2*i, 0)
+
+            # play sound from switch CHANNELS
+            self.setChannelVolume(2*i + 1, self.current_volume)
+
+        # create the *linear* volume arc (list of values to iteratively set channels to for crescendo/decrescendo effect)
+        volume_arc = list(range(0, self.current_volume, 5)) + [self.current_volume]
+
+        # travel over arc
+        for val in volume_arc:
+            for i in range(len(self.looper.parts)):
+                self.setChannelVolume(2*i, val)
+                self.setChannelVolume(2*i + 1, self.current_volume - val)
+
+            time.sleep(0.10)
+
+        # finally, switch instruments in the switch channels to current instruments_multi
+        for i in range(len(self.looper.parts)):
+            # switch instruments base channels and make them quiet
+            self.synth.program(2*i + 1, 0, patches[i])
+
+
 
 
 
@@ -240,7 +263,24 @@ class TransformationWidget(MainWidget):
         for i in range(len(self.looper.parts)):
             self.synth.cc(i, VOLUME_CC, self.current_volume)
 
+    def setChannelVolume(self, i, value):
+        self.synth.cc(i, VOLUME_CC, value)
+
     def on_update(self):
+        if self.checking_transformation_done:
+            if self.key_changing and not self.rhythm_changing:
+                self.keyChanged()
+                self.key_changing = False
+            elif self.rhythm_changing and not self.key_changing:
+                self.rhythmChanged()
+                self.rhythm_changing = False
+            elif self.key_changing and self.rhythm_changing:
+                self.keyChanged(self.current_rhythm)
+                self.key_changing = False
+                self.rhythm_changing = False
+
+            self.checking_transformation_done = False
+
         super(TransformationWidget, self).on_update()
 
 class KeyboardWidget(TransformationWidget):
@@ -343,18 +383,20 @@ class ArousalValenceWidget(TransformationWidget):
         self.file = open('./data/av.txt', 'r')
 
         self.tempo_grid = av_grid.TempoGrid()
-        self.tempo_grid.parse_point_file('./av-grid-points/tempo.txt')
+        self.tempo_grid.parse_point_file('./av-grid-points/tempo-mario.txt')
 
         self.rhythm_grid = av_grid.RhythmGrid()
-        self.rhythm_grid.parse_point_file('./av-grid-points/rhythm.txt')
+        self.rhythm_grid.parse_point_file('./av-grid-points/rhythm-mario.txt')
 
         self.instrument_grid = av_grid.InstrumentGrid()
-        self.instrument_grid.parse_point_file('./av-grid-points/instruments_multi.txt')
+        self.instrument_grid.parse_point_file('./av-grid-points/instruments_multi-mario.txt')
 
         self.key_grid = av_grid.KeySignatureGrid()
-        self.key_grid.parse_point_file('./av-grid-points/key.txt')
+        self.key_grid.parse_point_file('./av-grid-points/key-mario.txt')
 
     def transform_arousal_valence(self, arousal, valence):
+
+        self.checking_transformation_done = False
 
         # print(arousal)
         # print(valence)
@@ -382,7 +424,7 @@ class ArousalValenceWidget(TransformationWidget):
         try:
             # instrument
             instrument_point, _ = self.instrument_grid.sample_parameter_point(arousal, valence)
-            self.switchInstruments(list(instrument_point.get_value()))
+            self.executor.submit(self.switchInstruments, list(instrument_point.get_value()))
         except Exception as e:
             print("couldn't switch instruments")
 
@@ -394,7 +436,7 @@ class ArousalValenceWidget(TransformationWidget):
         except Exception as e:
             pass
 
-        self.checkKeyAndRhythmChange()
+        self.checking_transformation_done = True
 
     def change_note_velocity(self, arousal):
         max_velocity = 127
@@ -403,9 +445,7 @@ class ArousalValenceWidget(TransformationWidget):
         arousal /= 2.0
 
         velocity = max_velocity * arousal
-        print(velocity)
-
-        self.note_velocity = max(50, int(velocity))
+        self.note_velocity = max(45, int(velocity))
 
 
     def on_update(self):
@@ -414,12 +454,11 @@ class ArousalValenceWidget(TransformationWidget):
         if not line:
             self.file.seek(where)
         else:
+
             values = line.split(' ')
             self.arousal = float(values[0])
             self.valence = float(values[1])
-
-            self.transform_arousal_valence(self.arousal, self.valence)
-
+            self.executor.submit(self.transform_arousal_valence, self.arousal, self.valence)
 
         super(ArousalValenceWidget, self).on_update()
 

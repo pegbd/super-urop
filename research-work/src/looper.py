@@ -71,10 +71,10 @@ class SongLooper:
     def reset(self):
         self.current_measure_in_parts = [part[0] for part in self.parts]
         self.measure_index = 0
-        # self.last_measure_beat = 0
 
     def step(self, beat):
         if not self.modulating:
+            print("not modulating at all")
             self.measure_index = (self.measure_index + 1) % self.length
             self.current_measure_in_parts = [part[self.measure_index] for part in self.parts]
 
@@ -121,9 +121,19 @@ class SongLooper:
 
         # check both key and rhythms changing
         if key is not None:
+
+            # separate tonic and mode from keys
+            k = self.current_key.split(' ')
+            nk = key.split(' ')
+
+            # set the modulation progression from old key to new key
+            self.set_modulation_progression((k[0], k[1]), (nk[0], nk[1]), rhythm)
+
+            # indicating that we're modulating and that it is not yet complete
             self.modulating = True
             self.modulation_complete = False
             self.modulation_progression_index = 0
+
             key_change = True
 
         if rhythm is not None:
@@ -178,13 +188,14 @@ class SongLooper:
                         return_measures = self._transform_key(self.parts[i], tonic, mode)
 
                     #cache results
+                    print(len(return_measures))
                     self.transformation_cache[cache_key] = return_measures
 
                 return_parts.append(return_measures)
 
         # wait for the full modulation to complete:
         while not self.modulation_complete:
-            pass # block and do nothing
+            pass
 
         #set measures equal to the new measures
         self.parts = return_parts
@@ -217,7 +228,7 @@ class SongLooper:
     def set_modulation_progression(self, start_key, end_key, rhythm=None):
         progression = self.key_modulator.find_chord_path(start_key, end_key)
         progression_measures = self.key_modulator.get_modulation_measures(self.time_signature.numerator, progression)
-        self.modulation_progression = progression_measures
+        self.modulation_progression = progression_measures[-2:]
         self.modulation_progression_index = 0
         if rhythm:
             self.modulation_progression = transformer.fill_ostinato(progression_measures, rhythm)

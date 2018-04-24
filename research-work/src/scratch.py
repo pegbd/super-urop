@@ -4,6 +4,7 @@ import analyzer
 import music21 as m21
 import random
 import os
+import timeit
 
 # tempo_grid = av_grid.TempoGrid()
 # tempo_grid.parse_point_file('./av-grid-points/tempo.txt')
@@ -38,24 +39,29 @@ import os
 #
 # print (pitches1[:-4])
 
-f = open('./av-grid-points/rhythm.txt', 'w')
+# f = open('./av-grid-points/rhythm.txt', 'w')
+#
+# for i in range(1,5):
+#     for j in range(1,5):
+#         for k in range(1,5):
+#             for l in range(1,5):
+#                 line = str(i) + ' ' + str(j) + ' ' + str(k) + ' ' + str(l)
+#                 random_arousal = random.random() - 0.5
+#                 random_arousal /= 0.5
+#
+#                 random_valence = random.random() - 0.5
+#                 random_valence /= 0.5
+#
+#                 line += '\t' + str(random_arousal) + '\t' + str(random_valence) + '\n'
+#
+#                 print(line)
+#                 f.write(line)
+#                 f.flush()
+#                 os.fsync(f.fileno())
+#
+# f.close()
 
-for i in range(1,5):
-    for j in range(1,5):
-        for k in range(1,5):
-            for l in range(1,5):
-                line = str(i) + ' ' + str(j) + ' ' + str(k) + ' ' + str(l)
-                random_arousal = random.random() - 0.5
-                random_arousal /= 0.5
+self.file = open('./data/av.txt', 'r')
 
-                random_valence = random.random() - 0.5
-                random_valence /= 0.5
 
-                line += '\t' + str(random_arousal) + '\t' + str(random_valence) + '\n'
-
-                print(line)
-                f.write(line)
-                f.flush()
-                os.fsync(f.fileno())
-
-f.close()
+timeit.timeit()

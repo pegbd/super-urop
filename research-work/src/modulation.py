@@ -305,7 +305,7 @@ class KeyModulator:
 
             # set up next iteration of while loop, up the ancestry tree
             goal_node = parent
-#
+
         self.add_tonic(start_tuple[0], start_tuple[1], path)
         return path[::-1]
 
