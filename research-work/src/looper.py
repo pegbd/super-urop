@@ -126,13 +126,18 @@ class SongLooper:
             k = self.current_key.split(' ')
             nk = key.split(' ')
 
-            # set the modulation progression from old key to new key
-            self.set_modulation_progression((k[0], k[1]), (nk[0], nk[1]), rhythm)
+            # set the modulation progression from old key to new key (only if not already modulating!!)
+            if not self.modulating:
+                self.set_modulation_progression((k[0], k[1]), (nk[0], nk[1]), rhythm)
 
-            # indicating that we're modulating and that it is not yet complete
-            self.modulating = True
-            self.modulation_complete = False
-            self.modulation_progression_index = 0
+                # indicating that we're modulating and that it is not yet complete
+                self.modulating = True
+                self.modulation_complete = False
+                self.modulation_progression_index = 0
+
+            else:
+                self.modulation_complete = True
+                self.modulating = False
 
             key_change = True
 
@@ -198,6 +203,9 @@ class SongLooper:
             pass
 
         #set measures equal to the new measures
+        if self.modulating:
+            self.reset()
+
         self.parts = return_parts
         self.modulating = False
 
@@ -205,7 +213,7 @@ class SongLooper:
         self.current_measure_in_parts = [part[self.measure_index] for part in self.parts]
 
         # TODO: Decide if we want to reset to the beginning of the song after each key change
-        self.reset()
+        # self.reset()
 
     def get_current_measure(self):
         return self.current_measure_in_parts

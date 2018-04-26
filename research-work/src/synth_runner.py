@@ -1,3 +1,11 @@
+######
+#
+# Music system playback is possible thanks to:
+#   Widget-based Synthesizer Logic thanks to Eran Egozy
+#   Music21 Python Module via Michael Scott Cuthbert
+#
+######
+
 import sys
 sys.path.append('..')
 from common.core import *
@@ -148,7 +156,8 @@ class MainWidget(BaseWidget) :
             # self.executor.submit(self.measure_update, now_beat, now_tick)
             self.measure_update(now_beat, now_tick)
 
-        self.label.text = self.sched.now_str() + '\n'
+        self.label.text = "Synthesizer and accompanying code via Eran Egozy (21M.385)" + '\n\n'
+        self.label.text += self.sched.now_str() + '\n'
         self.label.text += 'key = ' + self.note_letter + self.accidental_letter + ' ' + self.mode + '\n'
         self.label.text += 'tempo = ' + str(self.tempo) + '\n'
 
@@ -169,6 +178,8 @@ class TransformationWidget(MainWidget):
         self.rhythm_changing = False
 
         self.checking_transformation_done = False
+
+        self.last_key_change_beat = 0
 
     #### TEMPO ###
     def tempoChanged(self):
@@ -195,22 +206,25 @@ class TransformationWidget(MainWidget):
             # # submit the actual transformation task to the executor
             self.executor.submit(self.looper.transform, None, new_key, rhythm)
 
-            # self.looper.transform(None, new_key, rhythm)
-
-
     def rhythmChanged(self):
         # submit the actual transformation task to the executor
         self.executor.submit(self.looper.transform, None, None, self.current_rhythm)
 
-
     def checkKeyChange(self, note, accidental, mode):
         # if this results in a key change, then calculate the new transformation
-        if not (self.note_letter == note and self.accidental_letter == accidental and self.mode == mode):
-            self.note_letter = note
-            self.accidental_letter = accidental
-            self.mode = mode
+        same_note = (self.note_letter == note)
+        same_accidental = (self.accidental_letter == accidental)
+        same_mode = (self.mode == mode)
 
-            self.key_changing = True
+        if not (same_note and same_accidental and same_mode):
+            # if (self.last_key_change_beat == 0) or (self.sched.get_current_beat() - self.last_key_change_beat > 20) or not same_mode:
+            if not same_mode:
+                self.note_letter = note
+                self.accidental_letter = accidental
+                self.mode = mode
+
+                self.key_changing = True
+                self.last_key_change_beat = self.sched.get_current_beat()
 
     def checkRhythmChange(self, rhythm):
         if self.current_rhythm != rhythm:
@@ -254,9 +268,6 @@ class TransformationWidget(MainWidget):
         for i in range(len(self.looper.parts)):
             # switch instruments base channels and make them quiet
             self.synth.program(2*i + 1, 0, patches[i])
-
-
-
 
 
     def setVolume(self):
