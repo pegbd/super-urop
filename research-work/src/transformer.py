@@ -9,7 +9,7 @@ import unittest
 import random
 import analyzer
 
-# TODO: Test cases at the bottom of each test case
+# TODO: Test cases
 # class TransformationTests(unittest.TestCase):
 #     import
 
